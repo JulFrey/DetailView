@@ -5,30 +5,22 @@ Created on Tue Apr 18 08:55:35 2023
 @author: Julian
 """
 
-import liblas
+# import packages
+import laspy as lp
+import numpy as np
 import matplotlib.pyplot as plt
 
+# read in las file
+las = lp.read(r"S:\3D4EcoTec\train\18146.las")
 
-import numpy as np
+# turn coordinates into numpy array
+points = np.stack((las.X, las.Y, las.Z), axis = 1)
 
-# Read a LAS file
-infile = liblas.file.File("D:/TLS/Puliti_Reference_Dataset/train/18146.las", mode="r")
+# set number of pixels
 npix = 512
-# Access point data
-x = []
-y = []
-z = []
-for point in infile:
-    x.append(point.x)
-    y.append(point.y)
-    z.append(point.z)
 
-x = x - np.mean(x)
-y = y - np.mean(y)
-z = z - np.mean(z)
-
-points = np.vstack((x, y, z)).T
-
+# Recenter data
+points = points - np.mean(points, axis = 0)
 
 # Define the camera parameters
 fov = 60  # field of view in degrees
@@ -58,11 +50,12 @@ view_matrix[:3, :3] = np.vstack((right, new_up, -view_direction))
 view_matrix[:3, 3] = -np.dot(view_matrix[:3, :3], camera_pos)
 
 # Compute the projected 2D coordinates
-homogeneous_points = np.hstack((points, np.ones((np.size(x), 1))))
+homogeneous_points = np.hstack((points, np.ones((points.shape[0], 1))))
 clip_coords = np.dot(np.dot(projection_matrix, view_matrix), homogeneous_points.T).T
 clip_coords /= clip_coords[:, 3][:, np.newaxis]
 pixel_coords = (clip_coords[:, :2] + 1.0) / 2.0 * np.array([npix, npix])
-pixel_coords = pixel_coords[np.argsort(z)]
+pixel_coords = pixel_coords[np.argsort(points[:,2])]
+
 """
 # Plot the projected 2D coordinates
 plt.scatter(pixel_coords[:, 0], pixel_coords[:, 1], s=z, cmap='viridis')
@@ -72,19 +65,17 @@ plt.gca().set_aspect('equal', adjustable='box')
 plt.show()
 """
 
-
 # Rasterize to a 2D plane with the third dimension as color
 fig, ax = plt.subplots()
-scatter = ax.scatter(pixel_coords[:, 0], pixel_coords[:, 1], c=np.sort(z), cmap='viridis')
+scatter = ax.scatter(pixel_coords[:, 0], pixel_coords[:, 1], c=np.sort(points[:,2]), cmap='viridis')
 
 # Add a colorbar
 #cbar = plt.colorbar(scatter)
 
-plt.xlim(0,npix)
-plt.ylim(0,npix)
+plt.xlim(0, npix)
+plt.ylim(0, npix)
 
 #cbar.ax.set_ylabel('Z')
-
 
 # Set the axis labels
 #ax.set_xlabel('X')
