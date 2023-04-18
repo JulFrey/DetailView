@@ -15,6 +15,7 @@ las = lp.read(r"S:\3D4EcoTec\train\18146.las")
 
 # turn coordinates into numpy array
 points = np.stack((las.X, las.Y, las.Z), axis = 1)
+points = points * las.header.scale
 
 # set number of pixels
 npix = 512
