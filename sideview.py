@@ -12,9 +12,10 @@ import glob
 import laspy as lp
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
 
 # set paths & variables
-path_las = r"D:\Baumartenklassifizierung\data\processed\03498.las"
+path_las = r"D:\TLS\Puliti_Reference_Dataset\train\03498.las"
 path_out = r"D:\Baumartenklassifizierung\data\raw"
 
 # create output folder
@@ -74,15 +75,15 @@ x_min, y_min, z_min = np.min(points, axis = 0)
 x_max, y_max, z_max = np.max(points, axis = 0)
 
 # calculate the size of each pixel in the x and y dimensions
-x_size = (x_max - x_min) / res_im
-y_size = (y_max - y_min) / res_im
+size = (max(x_max, y_max) - min(x_min,y_min)) / res_im
+#y_size = (max(x_max, y_max) - min(x_min,y_min)) / res_im
 
 # iterate over each point in the point cloud and update the depth image
 for point in points:
     
     # calculate the position of the point in the depth image
-    x_pos = int((point[0] - x_min) / x_size) - 1
-    y_pos = int((point[1] - y_min) / y_size) - 1
+    x_pos = int((point[0] - x_min) / size) - 1
+    y_pos = int((point[1] - y_min) / size) - 1
     
     # update the corresponding pixel in the depth image with the z coordinate
     if point[2] > depth_image[x_pos, y_pos]:
@@ -107,15 +108,15 @@ x_min, y_min, z_min = np.min(points, axis = 0)
 x_max, y_max, z_max = np.max(points, axis = 0)
 
 # calculate the size of each pixel in the x and y dimensions
-x_size = (x_max - x_min) / res_im
-z_size = (z_max - z_min) / res_im
+size = (max(x_max, z_max) - min(x_min,z_min)) / res_im
+#y_size = (max(x_max, y_max) - min(x_min,y_min)) / res_im
 
 # iterate over each point in the point cloud and update the depth image
 for point in points:
     
     # calculate the position of the point in the depth image
-    x_pos = int((point[0] - x_min) / x_size) - 1
-    z_pos = int((point[2] - z_min) / z_size) - 1
+    x_pos = int((point[0] - x_min) / size) - 1
+    z_pos = int((point[2] - z_min) / size) - 1
     
     # update the corresponding pixel in the depth image with the z coordinate
     if point[1] > depth_image[x_pos, z_pos]:
