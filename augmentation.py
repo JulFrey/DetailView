@@ -8,6 +8,7 @@ Created on Tue Apr 18 08:55:35 2023
 # import packages
 import os
 import math
+import glob
 import random
 import laspy as lp
 import numpy as np
@@ -58,9 +59,9 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
     points = np.stack((las.X, las.Y, las.Z), axis = 1)
     points = points * las.header.scale
     
-    # center data
-    # (bedingt sinnvoll, weil die Wolke durch das drehen auch verschoben wird)
-    points = points - np.median(points, axis = 0)
+    # # center data
+    # # (bedingt sinnvoll, weil die Wolke durch das drehen auch verschoben wird)
+    # points = points - np.median(points, axis = 0)
     
     # prepare transformation matrix
     transform = np.identity(4, float)
@@ -90,13 +91,13 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
     r_xyz = np.dot(np.dot(r_z_mat, r_y_mat), r_x_mat)
     transform[:3,:3] = r_xyz
     
-    # translate
-    # (bedingt sinnvoll, weil die Wolke durch das drehen auch verschoben wird)
-    # (vielleicht erst drehen, dann zentrieren, dann verschieben?
-    # -> trennen von drehen & skalieren?)
-    t_max = max(np.max(abs(points), axis = 0)) * translate_max
-    t_xyz = np.random.uniform(-t_max, t_max, 3)
-    transform[0:3,-1] = t_xyz
+    # # translate
+    # # (bedingt sinnvoll, weil die Wolke durch das drehen auch verschoben wird)
+    # # (vielleicht erst drehen, dann zentrieren, dann verschieben?
+    # # -> trennen von drehen & skalieren?)
+    # t_max = np.max(abs(points)) * translate_max
+    # t_xyz = np.random.uniform(-t_max, t_max, 3)
+    # transform[0:3,-1] = t_xyz
     
     # scale
     s_val = (1 + random.uniform(-scale_max, scale_max))
@@ -105,7 +106,7 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
     
     # apply transformation
     points = np.append(points, np.ones((points.shape[0],1), float), axis = 1)  # because of transformation
-    points = np.matmul(points, transform.T)
+    points = np.matmul(points, transform.T) # keine Ahnung warum das transposed werden muss
     points = points[:,:3]  # because of transformation
     
     # sub-sampling
