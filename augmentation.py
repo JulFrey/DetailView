@@ -58,6 +58,11 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
     points = np.stack((las.X, las.Y, las.Z), axis = 1)
     points = points * las.header.scale
     
+    # sub-sampling
+    s_num = int((1 - sampling_max) * points.shape[0])
+    s_idx = np.random.choice(np.arange(points.shape[0]), s_num, replace = False)
+    points = points[s_idx,:]
+    
     # # center data
     # # (bedingt sinnvoll, weil die Wolke durch das drehen auch verschoben wird)
     # points = points - np.median(points, axis = 0)
@@ -108,11 +113,6 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
     points = np.matmul(points, transform.T) # keine Ahnung warum das transposed werden muss
     points = points[:,:3]  # because of transformation
     
-    # sub-sampling
-    s_num = int((1 - sampling_max) * points.shape[0])
-    s_idx = np.random.choice(np.arange(points.shape[0]), s_num, replace = False)
-    points = points[s_idx,:]
-    
     # create a new las file
     new_header = lp.LasHeader(point_format = 0, version = "1.2")
     new_header.offsets = las.header.offset
@@ -122,7 +122,7 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
     new_las.y = points[:,1]
     new_las.z = points[:,2]
         
-    # write downsampled las
+    # write augmented las
     path_out_full = os.path.join(path_out, os.path.basename(path_las))
     new_las.write(path_out_full)
         

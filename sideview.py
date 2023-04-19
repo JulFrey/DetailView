@@ -28,7 +28,7 @@ if not os.path.exists(path_out):
 
 # set parameters
 num_perspective = 4
-res_im = 250
+res_im = 256
 
 # read in las file
 las = lp.read(path_las)
@@ -73,17 +73,25 @@ depth_image = np.ones((res_im, res_im)) * -999
 # find the minimum and maximum values of the x, y, and z coordinates
 x_min, y_min, z_min = np.min(points, axis = 0)
 x_max, y_max, z_max = np.max(points, axis = 0)
+x_med, y_med, z_med = np.median(points, axis = 0)
+
 
 # calculate the size of each pixel in the x and y dimensions
-size = (max(x_max, y_max) - min(x_min,y_min)) / res_im
+size = max(x_max - x_min, y_max - y_min) / res_im
 #y_size = (max(x_max, y_max) - min(x_min,y_min)) / res_im
+
+max_axis_x = x_max - x_min > y_max - y_min
 
 # iterate over each point in the point cloud and update the depth image
 for point in points:
     
     # calculate the position of the point in the depth image
-    x_pos = int((point[0] - x_min) / size) - 1
-    y_pos = int((point[1] - y_min) / size) - 1
+    if max_axis_x:
+        x_pos = int((point[0] - x_min) / size) -1
+        y_pos = int((point[1] - y_med) / size) + int(res_im/2) -1
+    else:
+        x_pos = int((point[0] - x_med) / size) + int(res_im/2) -1 
+        y_pos = int((point[1] - y_min) / size) -1 
     
     # update the corresponding pixel in the depth image with the z coordinate
     if point[2] > depth_image[x_pos, y_pos]:
@@ -93,7 +101,7 @@ for point in points:
 depth_image[depth_image == -999] = 0
 
 # show image
-plt.imshow(depth_image, interpolation='nearest')
+plt.imshow(depth_image.T, interpolation='nearest')
 plt.show()
 
 #%%
@@ -106,17 +114,24 @@ depth_image = np.ones((res_im, res_im)) * -999
 # find the minimum and maximum values of the x, y, and z coordinates
 x_min, y_min, z_min = np.min(points, axis = 0)
 x_max, y_max, z_max = np.max(points, axis = 0)
+x_med, y_med, z_med = np.median(points, axis = 0)
 
 # calculate the size of each pixel in the x and y dimensions
-size = (max(x_max, z_max) - min(x_min,z_min)) / res_im
+size = max(x_max - x_min, z_max - z_min) / res_im
 #y_size = (max(x_max, y_max) - min(x_min,y_min)) / res_im
+
+max_axis_x = x_max - x_min > z_max - z_min
 
 # iterate over each point in the point cloud and update the depth image
 for point in points:
     
     # calculate the position of the point in the depth image
-    x_pos = int((point[0] - x_min) / size) - 1
-    z_pos = int((point[2] - z_min) / size) - 1
+    if max_axis_x:
+        x_pos = int((point[0] - x_min) / size) -1 
+        z_pos = int((point[2] - z_med) / size) + int(res_im/2) -1
+    else:
+        x_pos = int((point[0] - x_med) / size) + int(res_im/2) -1
+        z_pos = int((point[2] - z_min) / size) -1
     
     # update the corresponding pixel in the depth image with the z coordinate
     if point[1] > depth_image[x_pos, z_pos]:
@@ -126,5 +141,5 @@ for point in points:
 depth_image[depth_image == -999] = 0
 
 # show image
-plt.imshow(depth_image, interpolation='nearest')
+plt.imshow(depth_image.T, interpolation='nearest')
 plt.show()
