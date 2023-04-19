@@ -23,7 +23,7 @@ if not os.path.exists(path_out):
 #%%
 
 def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
-            translate_max = 0.25, scale_max = 0.25):
+            translate_max = 0.25, scale_max = 0.25, sampling_max = 0.1):
     
     """
     Parameters
@@ -43,6 +43,8 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
         center as a fraction. The default is 0.25.
     scale_max : float, optional
         Maximum random scaling as a fraction. The default is 0.25.
+    sampling_max : float, optional
+        Maximum downsampling as a fraction. The default is 0.1.
 
     Returns
     -------
@@ -102,9 +104,14 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
     transform = np.dot(transform, s_xyz)
     
     # apply transformation
-    points = np.append(points, np.ones((points.shape[0],1), float), axis = 1)
+    points = np.append(points, np.ones((points.shape[0],1), float), axis = 1)  # because of transformation
     points = np.matmul(points, transform.T)
-    points = points[:,:3]
+    points = points[:,:3]  # because of transformation
+    
+    # sub-sampling
+    s_num = int((1 - sampling_max) * points.shape[0])
+    s_idx = np.random.choice(np.arange(points.shape[0]), s_num, replace = False)
+    points = points[s_idx,:]
     
     # create a new las file
     new_header = lp.LasHeader(point_format = 0, version = "1.2")
