@@ -11,6 +11,7 @@ import math
 import glob
 import laspy as lp
 import numpy as np
+import matplotlib.pyplot as plt
 
 # set paths & variables
 path_las = r"D:\Baumartenklassifizierung\data\processed\03498.las"
@@ -57,7 +58,72 @@ points = points - np.median(points, axis = 0)
 # scale point cloud
 points = points / np.max(abs(points))
 
-# prepare empty image
-img = np.zeros((res_im, res_im))
+#%%
 
-# ??? :(
+# momentane lösung staucht die Achsen zuammen :(
+
+#%%
+
+# creating topview
+
+# create an empty numpy array to store the depth image
+depth_image = np.ones((res_im, res_im)) * -999
+
+# find the minimum and maximum values of the x, y, and z coordinates
+x_min, y_min, z_min = np.min(points, axis = 0)
+x_max, y_max, z_max = np.max(points, axis = 0)
+
+# calculate the size of each pixel in the x and y dimensions
+x_size = (x_max - x_min) / res_im
+y_size = (y_max - y_min) / res_im
+
+# iterate over each point in the point cloud and update the depth image
+for point in points:
+    
+    # calculate the position of the point in the depth image
+    x_pos = int((point[0] - x_min) / x_size) - 1
+    y_pos = int((point[1] - y_min) / y_size) - 1
+    
+    # update the corresponding pixel in the depth image with the z coordinate
+    if point[2] > depth_image[x_pos, y_pos]:
+        depth_image[x_pos, y_pos] = point[2]
+
+# replace dummy values with value
+depth_image[depth_image == -999] = 0
+
+# show image
+plt.imshow(depth_image, interpolation='nearest')
+plt.show()
+
+#%%
+
+# creating sideview
+
+# create an empty numpy array to store the depth image
+depth_image = np.ones((res_im, res_im)) * -999
+
+# find the minimum and maximum values of the x, y, and z coordinates
+x_min, y_min, z_min = np.min(points, axis = 0)
+x_max, y_max, z_max = np.max(points, axis = 0)
+
+# calculate the size of each pixel in the x and y dimensions
+x_size = (x_max - x_min) / res_im
+z_size = (z_max - z_min) / res_im
+
+# iterate over each point in the point cloud and update the depth image
+for point in points:
+    
+    # calculate the position of the point in the depth image
+    x_pos = int((point[0] - x_min) / x_size) - 1
+    z_pos = int((point[2] - z_min) / z_size) - 1
+    
+    # update the corresponding pixel in the depth image with the z coordinate
+    if point[1] > depth_image[x_pos, z_pos]:
+        depth_image[x_pos, z_pos] = point[1]
+
+# replace dummy values with value
+depth_image[depth_image == -999] = 0
+
+# show image
+plt.imshow(depth_image, interpolation='nearest')
+plt.show()

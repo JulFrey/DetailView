@@ -7,7 +7,6 @@ Created on Tue Apr 18 08:55:35 2023
 
 # import packages
 import os
-import math
 import glob
 import random
 import laspy as lp
@@ -67,25 +66,25 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
     transform = np.identity(4, float)
     
     # x rotation matrix
-    r_x_rad = math.radians(random.uniform(-rotate_h_max, rotate_h_max))
+    r_x_rad = np.radians(random.uniform(-rotate_h_max, rotate_h_max))
     r_x_mat = np.array([
-        [1,                 0,                  0],
-        [0, math.cos(r_x_rad), -math.sin(r_x_rad)],
-        [0, math.sin(r_x_rad),  math.cos(r_x_rad)]])
+        [1,               0,                0],
+        [0, np.cos(r_x_rad), -np.sin(r_x_rad)],
+        [0, np.sin(r_x_rad),  np.cos(r_x_rad)]])
     
     # y rotation matrix
-    r_y_rad = math.radians(random.uniform(-rotate_h_max, rotate_h_max))
+    r_y_rad = np.radians(random.uniform(-rotate_h_max, rotate_h_max))
     r_y_mat = np.array([
-        [ math.cos(r_y_rad), 0, math.sin(r_y_rad)],
-        [                 0, 1,                 0],
-        [-math.sin(r_y_rad), 0, math.cos(r_y_rad)]])
+        [ np.cos(r_y_rad), 0, np.sin(r_y_rad)],
+        [               0, 1,               0],
+        [-np.sin(r_y_rad), 0, np.cos(r_y_rad)]])
     
     # z rotation matrix
-    r_z_rad = math.radians(random.uniform(-rotate_v_max, rotate_v_max))
+    r_z_rad = np.radians(random.uniform(-rotate_v_max, rotate_v_max))
     r_z_mat = np.array([
-        [math.cos(r_z_rad), -math.sin(r_z_rad), 0],
-        [math.sin(r_z_rad),  math.cos(r_z_rad), 0],
-        [                0,                  0, 1]])
+        [np.cos(r_z_rad), -np.sin(r_z_rad), 0],
+        [np.sin(r_z_rad),  np.cos(r_z_rad), 0],
+        [              0,                0, 1]])
     
     # combine rotation matrices
     r_xyz = np.dot(np.dot(r_z_mat, r_y_mat), r_x_mat)
