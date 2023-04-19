@@ -23,7 +23,7 @@ if not os.path.exists(path_out):
 #%%
 
 def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
-            translate_max = 0.25, scale_max = 0.25, sampling_max = 0.1):
+            translate_max = 0.25, sampling_max = 0.1):
     
     """
     Parameters
@@ -41,8 +41,6 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
     translate_max : float, optional
         Maximum random translation relative to the maximum expansion from the
         center as a fraction. The default is 0.25.
-    scale_max : float, optional
-        Maximum random scaling as a fraction. The default is 0.25.
     sampling_max : float, optional
         Maximum downsampling as a fraction. The default is 0.1.
 
@@ -63,12 +61,8 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
     s_idx = np.random.choice(np.arange(points.shape[0]), s_num, replace = False)
     points = points[s_idx,:]
     
-    # # center data
-    # # (bedingt sinnvoll, weil die Wolke durch das drehen auch verschoben wird)
-    # points = points - np.median(points, axis = 0)
-    
     # prepare transformation matrix
-    transform = np.identity(4, float)
+    transform = np.identity(3, float)
     
     # x rotation matrix
     r_x_rad = np.radians(random.uniform(-rotate_h_max, rotate_h_max))
@@ -95,23 +89,25 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
     r_xyz = np.dot(np.dot(r_z_mat, r_y_mat), r_x_mat)
     transform[:3,:3] = r_xyz
     
+    # apply transformation
+    points = np.matmul(points, transform.T)
+    
+    # center data
+    points = points - np.median(points, axis = 0)
+    
     # # translate
-    # # (bedingt sinnvoll, weil die Wolke durch das drehen auch verschoben wird)
-    # # (vielleicht erst drehen, dann zentrieren, dann verschieben?
-    # # -> trennen von drehen & skalieren?)
+    # # (auch useless, wenn wir den Baum im Bild sowieso zentrieren)
     # t_max = np.max(abs(points)) * translate_max
     # t_xyz = np.random.uniform(-t_max, t_max, 3)
-    # transform[0:3,-1] = t_xyz
+    # points = points + t_xyz
+    
+    # andere Ideen augmentation:
+    # - add random noise
+    # - cut off small parts
+    # - ???
     
     # scale
-    s_val = (1 + random.uniform(-scale_max, scale_max))
-    s_xyz = np.diag([s_val, s_val, s_val, 1])
-    transform = np.dot(transform, s_xyz)
-    
-    # apply transformation
-    points = np.append(points, np.ones((points.shape[0],1), float), axis = 1)  # because of transformation
-    points = np.matmul(points, transform.T) # keine Ahnung warum das transposed werden muss
-    points = points[:,:3]  # because of transformation
+    points = points / np.max(abs(points))
     
     # create a new las file
     new_header = lp.LasHeader(point_format = 0, version = "1.2")
