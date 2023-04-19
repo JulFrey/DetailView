@@ -7,11 +7,22 @@ Created on Tue Apr 18 08:55:35 2023
 
 # import packages
 import os
+import glob
 import laspy as lp
 import numpy as np
 
+# set paths & variables
+path_las = r"S:\3D4EcoTec\train"
+path_out = r"D:\Baumartenklassifizierung\data\raw"
 
-def downsample(path_las, path_out, res_pc):
+# create output folder
+if not os.path.exists(path_out):
+   os.makedirs(path_out)
+
+#%%
+
+def downsample(path_las, path_out, res_pc = 0.01, min_n = 100):
+    
     """
     Parameters
     ----------
@@ -19,8 +30,10 @@ def downsample(path_las, path_out, res_pc):
         Path to the input las file.
     path_out : str
         Path to the output folder.
-    res_pc : float
-        Target las resolution.
+    res_pc : float, optional
+        Target las resolution. The default is 0.01.
+    min_n : float, optional
+        Minimum number of points. The default is 100.
 
     Returns
     -------
@@ -34,13 +47,12 @@ def downsample(path_las, path_out, res_pc):
     points = np.stack((las.X, las.Y, las.Z), axis = 1)
     points = points * las.header.scale
     
-    # calculate bounding box
-    min_coords = np.min(points, axis = 0)
-    max_coords = np.max(points, axis = 0)
-    bounding_box_size = max_coords - min_coords
+    # check the number of points
+    if points.shape[0] < min_n:
+        return ""
     
-    # calculate number of voxels
-    num_voxels = np.ceil(bounding_box_size / res_pc).astype(int)
+    # calculate minimum coordinate values
+    min_coords = np.min(points, axis = 0)
     
     # calculate voxel indices for each point
     voxel_indices = np.floor((points - min_coords) / res_pc).astype(int)
@@ -48,6 +60,14 @@ def downsample(path_las, path_out, res_pc):
     # collect non-empty voxels
     unique_voxel_indices = np.unique(voxel_indices, axis = 0)
     points = (unique_voxel_indices + 0.5) * res_pc + min_coords
+    
+    # # calculate average point per voxel (takes too long)
+    # voxel_uniques = np.unique(voxel_indices, axis = 0)
+    # new_points = np.zeros(voxel_uniques.shape)
+    # for idx in range(voxel_uniques.shape[0]):
+    #     new_points[idx,:] = np.mean(points[(voxel_indices == voxel_uniques[idx,:]).all(axis = 1),:], axis = 0)
+    # points = new_points
+    # del new_points
     
     # create a new las file
     new_header = lp.LasHeader(point_format = 0, version = "1.2")
@@ -65,4 +85,11 @@ def downsample(path_las, path_out, res_pc):
     # return path
     return path_out_full
 
-downsample(r"S:\3D4EcoTec\train\18146.las", r"D:\Baumartenklassifizierung\data\raw", 0.01)
+#%%
+
+# # execution for all training las files
+# for path_curr in glob.glob(os.path.join(path_las, "*.las")):
+#     downsample(path_curr, path_out)
+
+# execution for a single file
+downsample(r"D:\Baumartenklassifizierung\data\raw\03498.las", path_out)
