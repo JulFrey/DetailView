@@ -91,23 +91,6 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
     # apply transformation
     points = np.matmul(points, transform.T)
     
-    # center data
-    points = points - np.median(points, axis = 0)
-    
-    # # translate
-    # # (auch useless, wenn wir den Baum im Bild sowieso zentrieren)
-    # t_max = np.max(abs(points)) * translate_max
-    # t_xyz = np.random.uniform(-t_max, t_max, 3)
-    # points = points + t_xyz
-    
-    # andere Ideen augmentation:
-    # - add random noise
-    # - cut off small parts
-    # - ???
-    
-    # scale
-    points = points / np.max(abs(points))
-    
     # create a new las file
     new_header = lp.LasHeader(point_format = 0, version = "1.2")
     new_header.offsets = las.header.offset
