@@ -91,21 +91,21 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
     # apply transformation
     points = np.matmul(points, transform.T)
     
-    # create a new las file
-    new_header = lp.LasHeader(point_format = 0, version = "1.2")
-    new_header.offsets = las.header.offset
-    new_header.scales = las.header.scale
-    new_las = lp.LasData(new_header)
-    new_las.x = points[:,0]
-    new_las.y = points[:,1]
-    new_las.z = points[:,2]
+    # # create a new las file
+    # new_header = lp.LasHeader(point_format = 0, version = "1.2")
+    # new_header.offsets = las.header.offset
+    # new_header.scales = las.header.scale
+    # new_las = lp.LasData(new_header)
+    # new_las.x = points[:,0]
+    # new_las.y = points[:,1]
+    # new_las.z = points[:,2]
         
-    # write augmented las
-    path_out_full = os.path.join(path_out, os.path.basename(path_las))
-    new_las.write(path_out_full)
+    # # write augmented las
+    # path_out_full = os.path.join(path_out, os.path.basename(path_las))
+    # new_las.write(path_out_full)
         
     # return path
-    return path_out_full
+    return points
 
 #%%
 
@@ -114,4 +114,5 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
 #     augment(path_curr, path_out)
 
 # execution for a single file
-augment(r"D:\Baumartenklassifizierung\data\raw\03498.las", path_out)
+pts = augment(r"D:\TLS\Puliti_Reference_Dataset\train\03492.las", path_out)
+print(pts.shape)

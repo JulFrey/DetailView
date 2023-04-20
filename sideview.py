@@ -23,13 +23,13 @@ if not os.path.exists(path_out):
 
 #%%
 
-def points_to_images(path_las, res_im = 256, num_side = 4, plot = False):
+def points_to_images(points, res_im = 256, num_side = 4, plot = False):
     """
 
     Parameters
     ----------
-    path_las : string
-        path to las file
+    points : np.array
+        point coordinates xyz
     res_im : int, optional
         edge length of the quadratic tensor. The default is 256.
     num_side : int, optional
@@ -44,12 +44,12 @@ def points_to_images(path_las, res_im = 256, num_side = 4, plot = False):
 
     """
     
-    # read in las file
-    las = lp.read(path_las)
+    # # read in las file
+    # las = lp.read(path_las)
     
-    # turn coordinates into numpy array
-    points = np.stack((las.X, las.Y, las.Z), axis = 1)
-    points = points * las.header.scale
+    # # turn coordinates into numpy array
+    # points = np.stack((las.X, las.Y, las.Z), axis = 1)
+    # points = points * las.header.scale
     
     section_image = sectionview(points, res_im = res_im, plot = plot)
     
