@@ -15,23 +15,18 @@ from sklearn.cluster import DBSCAN
 
 # set paths & variables
 path_las = r"D:\Baumartenklassifizierung\data\processed\03498.las"
-path_out = r"D:\Baumartenklassifizierung\data\images"
-
-# create output folder
-if not os.path.exists(path_out):
-   os.makedirs(path_out)
 
 #%%
 
 def points_to_images(points, res_im = 256, num_side = 4, plot = False):
+    
     """
-
     Parameters
     ----------
     points : np.array
-        point coordinates xyz
+        XYZ point coordinates in np.array.
     res_im : int, optional
-        edge length of the quadratic tensor. The default is 256.
+        Edge length of the quadratic tensor. The default is 256.
     num_side : int, optional
         number of side views. The default is 4.
     plot : bool, optional
@@ -39,9 +34,8 @@ def points_to_images(points, res_im = 256, num_side = 4, plot = False):
 
     Returns
     -------
-    views : TYPE
-        DESCRIPTION.
-
+    views : np.array
+        Different 2D views stacked in np.array.
     """
     
     # # read in las file
@@ -51,20 +45,17 @@ def points_to_images(points, res_im = 256, num_side = 4, plot = False):
     # points = np.stack((las.X, las.Y, las.Z), axis = 1)
     # points = points * las.header.scale
     
-    section_image = sectionview(points, res_im = res_im, plot = plot)
+    # prepare view array
+    views = np.zeros((num_side + 3, res_im, res_im))
     
-    # will be done by augmentation function >>
+    # add DBH section view
+    views[num_side + 2,:,:] = sectionview(points, res_im = res_im, plot = plot)
     
     # center point cloud
     points = points - np.median(points, axis = 0)
     
     # scale point cloud
-    points = points / np.max(abs(points))
-    
-    # << will be done by augmentation function
-    
-    # prepare view array
-    views = np.zeros((num_side + 3, res_im, res_im))
+    points = points / np.max(abs(points))    
     
     # add top view
     views[0,:,:] = topview(points, res_im = res_im, plot = plot)
@@ -92,14 +83,29 @@ def points_to_images(points, res_im = 256, num_side = 4, plot = False):
     # add bottom view
     views[num_side + 1,:,:] = topview(points, res_im = res_im, inverse = True, plot = plot)
     
-    # add DBH section view
-    views[num_side + 2,:,:] = section_image
-    
     # return
     return views
 
 # creating topview
 def topview(points, res_im = 256, inverse = False, plot = False):
+    
+    """
+    Parameters
+    ----------
+    points : np.array
+        XYZ point coordinates in np.array.
+    res_im : int, optional
+        Edge length of the quadratic tensor. The default is 256.
+    inverse : bool, optional
+        Calculate bottom view instead. The default is False.
+    plot : bool, optional
+        Plot the results for debugging. The default is False.
+
+    Returns
+    -------
+    top_image : np.array
+        2D view in np.array.
+    """
     
     # find the minimum and maximum values of the x, y, and z coordinates
     x_min, y_min, z_min = np.min(points, axis = 0)
@@ -167,6 +173,22 @@ def topview(points, res_im = 256, inverse = False, plot = False):
 # creating sideview
 def sideview(points, res_im = 256, plot = False):
     
+    """
+    Parameters
+    ----------
+    points : np.array
+        XYZ point coordinates in np.array.
+    res_im : int, optional
+        Edge length of the quadratic tensor. The default is 256.
+    plot : bool, optional
+        Plot the results for debugging. The default is False.
+
+    Returns
+    -------
+    side_image : np.array
+        2D view in np.array.
+    """
+    
     # find the minimum and maximum values of the x, y, and z coordinates
     x_min, y_min, z_min = np.min(points, axis = 0)
     x_max, y_max, z_max = np.max(points, axis = 0)
@@ -214,23 +236,39 @@ def sideview(points, res_im = 256, plot = False):
 
 # creating sideview
 def sectionview(points, res_im = 256, plot = False):
+    
+    """
+    Parameters
+    ----------
+    points : np.array
+        XYZ point coordinates in np.array.
+    res_im : int, optional
+        Edge length of the quadratic tensor. The default is 256.
+    plot : bool, optional
+        Plot the results for debugging. The default is False.
+
+    Returns
+    -------
+    section_image : np.array
+        2D view in np.array.
+    """
+    
+    # extract DBH section
     section = points[(points[:,2] < 1.5) & (points[:,2] > 1),:]
     
-    if section.shape[0] > 50: #if section nearly empty skip
-        # Set up the clustering algorithm
-        dbscan = DBSCAN(eps=0.10, min_samples=10)
+    # skip if section nearly empty
+    if section.shape[0] > 50:
         
-        # Fit the clustering algorithm to the data
+        # set up the clustering algorithm
+        dbscan = DBSCAN(eps = 0.10, min_samples = 10)
+        
+        # fit the clustering algorithm
         dbscan.fit(section)
         
-        # Find the label of the largest cluster
+        # get largest cluster
         labels = dbscan.labels_
         largest_cluster_label = np.argmax(np.bincount(labels[labels!=-1]))
-        
-        # Get the indices of the points in the largest cluster
         largest_cluster_indices = np.where(labels == largest_cluster_label)[0]
-        
-        # Get the points in the largest cluster
         section = section[largest_cluster_indices]
     
         # center point cloud
@@ -241,7 +279,9 @@ def sectionview(points, res_im = 256, plot = False):
         
         # create sideview
         section_image = sideview(section, res_im = 256, plot = False)
+        
     else:
+        # create empty array
         section_image = np.zeros((res_im, res_im))
         
     # show image
@@ -249,6 +289,7 @@ def sectionview(points, res_im = 256, plot = False):
         plt.imshow(section_image, interpolation = 'nearest')
         plt.show()
     
+    # return array
     return section_image
 
 #%%
@@ -258,5 +299,7 @@ def sectionview(points, res_im = 256, plot = False):
 #     points_to_images(path_curr)
 
 # example 
-views = points_to_images(r"D:\TLS\Puliti_Reference_Dataset\train\03492.las", plot = True)
-
+las = lp.read(r"D:\Baumartenklassifizierung\data\train_downsampled\03498.las")
+points = np.stack((las.X, las.Y, las.Z), axis = 1)
+points = points * las.header.scale
+views = points_to_images(points, plot = True)

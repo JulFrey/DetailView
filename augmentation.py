@@ -12,16 +12,11 @@ import laspy as lp
 import numpy as np
 
 # set paths & variables
-path_las = r"D:\Baumartenklassifizierung\data\raw"
-path_out = r"D:\Baumartenklassifizierung\data\processed"
-
-# create output folder
-if not os.path.exists(path_out):
-   os.makedirs(path_out)
+path_las = r"D:\Baumartenklassifizierung\data\train_downsampled"
 
 #%%
 
-def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
+def augment(path_las, rotate_h_max = 22.5, rotate_v_max = 180,
             translate_max = 0.25, sampling_max = 0.1):
     
     """
@@ -29,8 +24,6 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
     ----------
     path_las : str
         Path to the input las file.
-    path_out : str
-        Path to the output folder.
     rotate_h_max : float, optional
         Maximum random rotation along the horizontal axes in degree. The
         default is 22.5.
@@ -45,7 +38,7 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
 
     Returns
     -------
-    Path to new point cloud.
+    XYZ point coordinates in np.array.
     """
     
     # read in las file
@@ -111,8 +104,8 @@ def augment(path_las, path_out, rotate_h_max = 22.5, rotate_v_max = 180,
 
 # # execution for all training las files
 # for path_curr in glob.glob(os.path.join(path_las, "*.las")):
-#     augment(path_curr, path_out)
+#     augment(path_curr)
 
 # execution for a single file
-pts = augment(r"D:\TLS\Puliti_Reference_Dataset\train\03492.las", path_out)
+pts = augment(r"D:\Baumartenklassifizierung\data\train_downsampled\03498.las")
 print(pts.shape)
