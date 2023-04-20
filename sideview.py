@@ -11,6 +11,7 @@ import glob
 import laspy as lp
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.cluster import DBSCAN
 
 # set paths & variables
 path_las = r"D:\Baumartenklassifizierung\data\processed\03498.las"
@@ -50,6 +51,8 @@ def points_to_images(path_las, res_im = 256, num_side = 4, plot = False):
     points = np.stack((las.X, las.Y, las.Z), axis = 1)
     points = points * las.header.scale
     
+    section_image = sectionview(points, res_im = res_im, plot = plot)
+    
     # will be done by augmentation function >>
     
     # center point cloud
@@ -61,10 +64,10 @@ def points_to_images(path_las, res_im = 256, num_side = 4, plot = False):
     # << will be done by augmentation function
     
     # prepare view array
-    views = np.zeros((num_side + 2, res_im, res_im))
+    views = np.zeros((num_side + 3, res_im, res_im))
     
     # add top view
-    views[0,:,:] = topview(points, res_im, plot = plot)
+    views[0,:,:] = topview(points, res_im = res_im, plot = plot)
     
     # loop through perspectives
     deg_steps = np.linspace(0, 180, num = num_side)
@@ -84,16 +87,19 @@ def points_to_images(path_las, res_im = 256, num_side = 4, plot = False):
         points_rot = np.matmul(points, rot.T)
         
         # get side images
-        views[i+1,:,:] = sideview(points_rot, res_im, plot = plot)
+        views[i+1,:,:] = sideview(points_rot, res_im = res_im, plot = plot)
     
     # add bottom view
-    views[num_side + 1,:,:] = topview(points, res_im, inverse = True, plot = plot)
+    views[num_side + 1,:,:] = topview(points, res_im = res_im, inverse = True, plot = plot)
+    
+    # add DBH section view
+    views[num_side + 2,:,:] = section_image
     
     # return
     return views
 
 # creating topview
-def topview(points, res_im, inverse = False, plot = False):
+def topview(points, res_im = 256, inverse = False, plot = False):
     
     # find the minimum and maximum values of the x, y, and z coordinates
     x_min, y_min, z_min = np.min(points, axis = 0)
@@ -159,7 +165,7 @@ def topview(points, res_im, inverse = False, plot = False):
     return top_image
 
 # creating sideview
-def sideview(points, res_im, plot = False):
+def sideview(points, res_im = 256, plot = False):
     
     # find the minimum and maximum values of the x, y, and z coordinates
     x_min, y_min, z_min = np.min(points, axis = 0)
@@ -205,6 +211,46 @@ def sideview(points, res_im, plot = False):
     # return array
     return side_image
 
+
+# creating sideview
+def sectionview(points, res_im = 256, plot = False):
+    section = points[(points[:,2] < 1.5) & (points[:,2] > 1),:]
+    
+    if section.shape[0] > 50: #if section nearly empty skip
+        # Set up the clustering algorithm
+        dbscan = DBSCAN(eps=0.10, min_samples=10)
+        
+        # Fit the clustering algorithm to the data
+        dbscan.fit(section)
+        
+        # Find the label of the largest cluster
+        labels = dbscan.labels_
+        largest_cluster_label = np.argmax(np.bincount(labels[labels!=-1]))
+        
+        # Get the indices of the points in the largest cluster
+        largest_cluster_indices = np.where(labels == largest_cluster_label)[0]
+        
+        # Get the points in the largest cluster
+        section = section[largest_cluster_indices]
+    
+        # center point cloud
+        section = section - np.median(section, axis = 0)
+        
+        # scale point cloud
+        section = section / np.max(abs(section))
+        
+        # create sideview
+        section_image = sideview(section, res_im = 256, plot = False)
+    else:
+        section_image = np.zeros((res_im, res_im))
+        
+    # show image
+    if plot:
+        plt.imshow(section_image, interpolation = 'nearest')
+        plt.show()
+    
+    return section_image
+
 #%%
 
 # # execution for all training las files
@@ -213,3 +259,4 @@ def sideview(points, res_im, plot = False):
 
 # example 
 views = points_to_images(r"D:\TLS\Puliti_Reference_Dataset\train\03492.las", plot = True)
+
