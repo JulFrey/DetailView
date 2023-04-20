@@ -138,9 +138,21 @@ class TrainDataset_testing():
         return sample
 
 tree_dataset = TrainDataset_testing(r"D:\TLS\Puliti_Reference_Dataset\train_labels.csv", "D:\\\\TLS\\Puliti_Reference_Dataset")
-batch_size = 10
-data_loader = torch.utils.data.DataLoader(tree_dataset, batch_size)
+batch_size = 2
 
-for views, species in data_loader:  
-    sample_image = views[0]    # Reshape them according to your needs.
-    sample_label = species[0]
+def collate_fn(list_items):
+     x = []
+     y = []
+     for X in list_items:
+     #     #print(f'x_={views_}, y_={y_}')
+          x.append(X["views"])
+          y.append(X["species"])
+     return x, y
+
+
+data_loader = torch.utils.data.DataLoader(tree_dataset, batch_size, collate_fn= collate_fn)
+
+for tensor, label in data_loader:  
+    sample_image = tensor   # Reshape them according to your needs.
+    sample_label = label
+    break
