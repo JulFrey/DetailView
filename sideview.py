@@ -87,13 +87,13 @@ def points_to_images(path_las, res_im = 256, num_side = 4, plot = False):
         views[i+1,:,:] = sideview(points_rot, res_im, plot = plot)
     
     # add bottom view
-    views[num_side + 1,:,:] = topview(points, res_im, bottom = True, plot = plot)
+    views[num_side + 1,:,:] = topview(points, res_im, inverse = True, plot = plot)
     
     # return
     return views
 
 # creating topview
-def topview(points, res_im, bottom = False, plot = False):
+def topview(points, res_im, inverse = False, plot = False):
     
     # find the minimum and maximum values of the x, y, and z coordinates
     x_min, y_min, z_min = np.min(points, axis = 0)
@@ -110,7 +110,7 @@ def topview(points, res_im, bottom = False, plot = False):
     max_axis_x = (x_max - x_min) > (y_max - y_min)
     
     # iterate over each point in the point cloud and update the depth image
-    if bottom:
+    if inverse:
         for point in points:
             
             # calculate the position of the point in the depth image
