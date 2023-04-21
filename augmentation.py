@@ -6,13 +6,13 @@ Created on Tue Apr 18 08:55:35 2023
 """
 
 # import packages
-import os
-import glob
+# import os
+# import glob
 import laspy as lp
 import numpy as np
 
-# set paths & variables
-path_las = r"D:\Baumartenklassifizierung\data\train_downsampled"
+# # set paths & variables
+# path_las = r"D:\Baumartenklassifizierung\data\train_downsampled"
 
 #%%
 

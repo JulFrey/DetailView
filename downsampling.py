@@ -13,7 +13,7 @@ import numpy as np
 
 # set paths & variables
 path_las = r"S:\3D4EcoTec\train"
-path_out = r"D:\Baumartenklassifizierung\data\raw"
+path_out = r"D:\Baumartenklassifizierung\data\train_downsampled"
 
 # create output folder
 if not os.path.exists(path_out):
@@ -84,6 +84,38 @@ def downsample(path_las, path_out, res_pc = 0.01, min_n = 100):
     
     # return path
     return path_out_full
+
+#%%
+
+# import pdal
+
+# # Define the PDAL pipeline
+# pipeline = pdal.Pipeline(json.dumps({
+#     "pipeline": [
+#         {
+#             "type": "readers.las",
+#             "filename": "input.las"
+#         },
+#         {
+#             "type": "filters.sample",
+#             "leaf_size": 2.0
+#         },
+#         {
+#             "type": "writers.las",
+#             "filename": "output.las"
+#         }
+#     ]
+# }))
+
+# # Execute the pipeline
+# pipeline.execute()
+
+# # Get the output file path
+# output_file = pipeline.arrays[0]
+
+# # Print some information about the output file
+# print("Downsampled point count:", output_file.shape[0])
+# print("Output file:", output_file.filename)
 
 #%%
 

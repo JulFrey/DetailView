@@ -6,9 +6,9 @@ Created on Tue Apr 18 08:55:35 2023
 """
 
 # import packages
-import os
-import glob
-import laspy as lp
+# import os
+# import glob
+# import laspy as lp
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
