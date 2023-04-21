@@ -87,6 +87,38 @@ def downsample(path_las, path_out, res_pc = 0.01, min_n = 100):
 
 #%%
 
+# import pdal
+
+# # Define the PDAL pipeline
+# pipeline = pdal.Pipeline(json.dumps({
+#     "pipeline": [
+#         {
+#             "type": "readers.las",
+#             "filename": "input.las"
+#         },
+#         {
+#             "type": "filters.sample",
+#             "leaf_size": 2.0
+#         },
+#         {
+#             "type": "writers.las",
+#             "filename": "output.las"
+#         }
+#     ]
+# }))
+
+# # Execute the pipeline
+# pipeline.execute()
+
+# # Get the output file path
+# output_file = pipeline.arrays[0]
+
+# # Print some information about the output file
+# print("Downsampled point count:", output_file.shape[0])
+# print("Output file:", output_file.filename)
+
+#%%
+
 # # execution for all training las files
 # for path_curr in glob.glob(os.path.join(path_las, "*.las")):
 #     downsample(path_curr, path_out)
