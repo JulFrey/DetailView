@@ -171,7 +171,6 @@ def collate_fn(list_items):
      x = []
      y = []
      for X in list_items:
-     #     #print(f'x_={views_}, y_={y_}')
           x.append(X["views"])
           y.append(X["species"])
      return x, y
@@ -190,7 +189,7 @@ print(f"Using {device} device")
 # load empty densenet201 model
 model = torch.hub.load('pytorch/vision:v0.10.0', 'densenet121', weights = None)
 
-# ???
+# give to
 model.to('cuda')
 
 # change input and output layer
