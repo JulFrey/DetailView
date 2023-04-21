@@ -6,9 +6,9 @@ Created on Tue Apr 18 08:55:35 2023
 """
 
 # import packages
-import os
-import glob
-import laspy as lp
+# import os
+# import glob
+# import laspy as lp
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
@@ -298,8 +298,8 @@ def sectionview(points, res_im = 256, plot = False):
 # for path_curr in glob.glob(os.path.join(path_las, "*.las")):
 #     points_to_images(path_curr)
 
-# example 
-las = lp.read(r"D:\Baumartenklassifizierung\data\train_downsampled\03498.las")
-points = np.stack((las.X, las.Y, las.Z), axis = 1)
-points = points * las.header.scale
-views = points_to_images(points, plot = True)
+# # example 
+# las = lp.read(r"D:\Baumartenklassifizierung\data\train_downsampled\03498.las")
+# points = np.stack((las.X, las.Y, las.Z), axis = 1)
+# points = points * las.header.scale
+# views = points_to_images(points, plot = True)

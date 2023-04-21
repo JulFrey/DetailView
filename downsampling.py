@@ -13,7 +13,7 @@ import numpy as np
 
 # set paths & variables
 path_las = r"S:\3D4EcoTec\train"
-path_out = r"D:\Baumartenklassifizierung\data\raw"
+path_out = r"D:\Baumartenklassifizierung\data\train_downsampled"
 
 # create output folder
 if not os.path.exists(path_out):
