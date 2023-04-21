@@ -107,5 +107,5 @@ def augment(path_las, rotate_h_max = 22.5, rotate_v_max = 180,
 #     augment(path_curr)
 
 # execution for a single file
-pts = augment(r"D:\Baumartenklassifizierung\data\train_downsampled\03498.las")
-print(pts.shape)
+# pts = augment(r"D:\Baumartenklassifizierung\data\train_downsampled\03498.las")
+# print(pts.shape)

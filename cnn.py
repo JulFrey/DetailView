@@ -13,6 +13,7 @@ import os
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 import matplotlib.pyplot as plt
+import torchvision
 from torchvision import transforms
 from skimage import io, transform
 
@@ -156,3 +157,53 @@ for tensor, label in data_loader:
     sample_image = tensor   # Reshape them according to your needs.
     sample_label = label
     break
+#%%
+
+
+# Define the transform to apply to the images
+transform = transforms.Compose([
+    transforms.Resize((256, 256)),
+    transforms.ToTensor(),
+    transforms.Normalize((0.5,), (0.5,))
+])
+
+
+# Define the dataset and data loader
+dataset = TrainDataset_testing(r"D:\TLS\Puliti_Reference_Dataset\train_labels.csv", "D:\\\\TLS\\Puliti_Reference_Dataset", transform = transform)
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True, collate_fn = collate_fn)
+
+# Define the model
+model = torchvision.models.densenet201(pretrained=True)
+num_ftrs = model.classifier.in_features
+model.classifier = torch.nn.Linear(num_ftrs, 33)
+
+# Define the loss function and optimizer
+criterion = torch.nn.CrossEntropyLoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+# Train the model
+num_epochs = 10
+
+for epoch in range(num_epochs):
+    running_loss = 0.0
+    
+    for i, data in enumerate(dataloader, 0):
+        inputs, labels = data
+        
+        # Zero the parameter gradients
+        optimizer.zero_grad()
+        
+        # Forward + backward + optimize
+        outputs = model(inputs)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+        
+        # Print statistics
+        running_loss += loss.item()
+        if i % 100 == 99:
+            print('[%d, %5d] loss: %.3f' %
+                  (epoch + 1, i + 1, running_loss / 100))
+            running_loss = 0.0
+
+print('Finished training')
