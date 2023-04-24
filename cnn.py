@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import torchvision
 from sklearn.preprocessing import LabelEncoder
 from torchvision import transforms
-from skimage import io, transform
+#from skimage import io, transform
 
 # import own functions
 import augmentation as au
@@ -26,7 +26,7 @@ import sideview as sv
 # tensor = torch.tensor(views)
 
 # read the csv file with labels to convert
-labels = pd.read_csv(r"S:\3D4EcoTec\tree_metadata_training_publish.csv")
+labels = pd.read_csv(r"V:\3D4EcoTec\tree_metadata_training_publish.csv")
 
 # initialize LabelEncoder object
 le = LabelEncoder()
@@ -36,9 +36,10 @@ labels = pd.concat([labels, pd.DataFrame(le.fit_transform(labels['species']), co
 labels = labels[['filename', 'species_id', 'tree_H']]
 
 # TODO: change path to downsampled point clouds?
+# TODO: exclude super small point clouds
 
 # save new label data frame
-labels.to_csv(r"S:\3D4EcoTec\train_labels.csv", index = False)
+labels.to_csv(r"V:\3D4EcoTec\train_labels.csv", index = False)
 
 #%%
 
@@ -185,17 +186,9 @@ device = (
     else "mps"
     if torch.backends.mps.is_available()
     else "cpu")
-print(f"Using {device} device")
 
 # load empty densenet201 model
 model = torch.hub.load('pytorch/vision:v0.10.0', 'densenet121', weights = None)
-
-# give to
-model.to('cuda')
-
-# change input and output layer
-model.classifier = torch.nn.Linear(1024, 33)
-model.features[0] = torch.nn.Conv2d(1, 64, kernel_size = (7,7))
 
 # create dataset object
 tree_dataset = TrainDataset_testing(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec\downsampled")
@@ -204,10 +197,10 @@ tree_dataset = TrainDataset_testing(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4Ec
 batch_size = 2
 data_loader = torch.utils.data.DataLoader(tree_dataset, batch_size, collate_fn = collate_fn)
 
-for tensor, label in data_loader:  
-    sample_image = tensor   # Reshape them according to your needs.
-    sample_label = label
-    break
+# for tensor, label in data_loader:  
+#     sample_image = tensor   # Reshape them according to your needs.
+#     sample_label = label
+#     break
 #%%
 
 
@@ -220,13 +213,16 @@ transform = transforms.Compose([
 
 
 # Define the dataset and data loader
-dataset = TrainDataset_testing(r"D:\TLS\Puliti_Reference_Dataset\train_labels.csv", "D:\\\\TLS\\Puliti_Reference_Dataset", transform = transform)
+dataset = TrainDataset_testing(r"D:\TLS\Puliti_Reference_Dataset\train_labels.csv", r"D:\\TLS\Puliti_Reference_Dataset", transform = transform)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True, collate_fn = collate_fn)
 
 # Define the model
 model = torchvision.models.densenet201(pretrained=True)
 num_ftrs = model.classifier.in_features
 model.classifier = torch.nn.Linear(num_ftrs, 33)
+
+# give to
+model.to(device)
 
 # Define the loss function and optimizer
 criterion = torch.nn.CrossEntropyLoss()
