@@ -13,8 +13,7 @@ import numpy as np
 
 def read_las(path_las):
     
-    """
-    
+    """ 
     Parameters
     ----------
     path_las : str
