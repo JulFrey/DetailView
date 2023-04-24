@@ -9,7 +9,7 @@ Created on Tue Apr 18 08:55:35 2023
 # import os
 # import glob
 # import laspy as lp
-import read_las
+import read_las as rl
 import numpy as np
 
 # # set paths & variables
@@ -43,11 +43,11 @@ def augment(path_las, rotate_h_max = 22.5, rotate_v_max = 180,
     """
     
     # read in las file
-    las = read_las(path_las)
+    points = rl.read_las(path_las)
     
     # turn coordinates into numpy array
-    points = np.stack((las.X, las.Y, las.Z), axis = 1)
-    points = points * las.header.scale
+    #points = np.stack((las.X, las.Y, las.Z), axis = 1)
+    #points = points * las.header.scale
     
     # sub-sampling
     s_num = int((1 - sampling_max) * points.shape[0])

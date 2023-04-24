@@ -97,7 +97,7 @@ class TrainDataset():
 # %%
 
 # create dataset object
-tree_dataset = TrainDataset(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec\downsampled")
+tree_dataset = TrainDataset(r"V:\3D4EcoTec\train_labels.csv", r"V:\3D4EcoTec")
 
 # visualizing  sample
 test = tree_dataset[1]
@@ -112,7 +112,7 @@ data_transform = transforms.Compose([
     ])
 
 # create dataset object
-tree_dataset = TrainDataset(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec\downsampled", img_trans = data_transform) 
+tree_dataset = TrainDataset(r"V:\3D4EcoTec\train_labels.csv", r"V:\3D4EcoTec", img_trans = data_transform) 
 
 # visualizing  sample
 test = tree_dataset[1]
@@ -159,7 +159,8 @@ class TrainDataset_testing():
         views = sv.points_to_images(au.augment(las_name))
         
         # get side view
-        views = torch.from_numpy(views[1,:,:])
+        views = torch.from_numpy(views[0:3,:,:])
+        # views = Image.fromarray(views[0:3,:,:])
         
         # augment images
         if self.img_trans:
@@ -170,14 +171,60 @@ class TrainDataset_testing():
                 'species': self.trees_frame.iloc[idx, 1]}
 
 def collate_fn(list_items):
-     x = []
-     y = []
-     for X in list_items:
-          x.append(X["views"])
-          y.append(X["species"])
+     x = torch.unsqueeze(list_items[0]["views"], dim = 0)
+     y = torch.tensor([list_items[0]["species"]])
+     for X in list_items[1:]:
+          x = torch.cat((x, torch.unsqueeze(X["views"], dim = 0)), dim = 0)
+          y = torch.cat((y, torch.tensor([X["species"]])), dim = 0)
+          
+     x = x.to("cuda", non_blocking=True)
+     y = y.to("cuda", non_blocking=True)
      return x, y
+ 
+# found a more ellegant sollution need to test:
+# def collator(batch):
+#     X, Y = [], []
+#     for x, y in batch:
+#         X += [x, ]
+#         Y += [y, ]
+#     return torch.stack(X), torch.stack(Y)
 
 #%%
+
+# # load empty densenet201 model
+# model = torch.hub.load('pytorch/vision:v0.10.0', 'densenet121', weights = None)
+
+# # create dataset object
+tree_dataset = TrainDataset_testing(r"V:\3D4EcoTec\train_labels.csv", r"V:\3D4EcoTec")
+
+# # create data loader
+batch_size = 4
+data_loader = torch.utils.data.DataLoader(tree_dataset, batch_size, collate_fn = collate_fn)
+images, labels = next(iter(data_loader))
+
+#%%
+
+# Define the transform to apply to the images
+trafo = transforms.Compose([
+    transforms.Resize(64),
+    transforms.ToTensor()
+])
+
+
+# Define the dataset and data loader
+dataset = TrainDataset_testing(r"V:\3D4EcoTec\train_labels.csv", r"V:\3D4EcoTec")
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=6, shuffle=True, collate_fn = collate_fn) #num_workers=5 ,, pin_memory=True
+
+images, labels = next(iter(dataloader))
+
+# %%
+
+# Define the model
+model = torchvision.models.densenet201(weights='DenseNet201_Weights.DEFAULT')
+# model.features[0]
+# model.features[0] = torch.nn.Conv2d(1, 256, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+num_ftrs = model.classifier.in_features
+model.classifier = torch.nn.Linear(num_ftrs, 33)
 
 # get the cuda device
 device = (
@@ -187,42 +234,9 @@ device = (
     if torch.backends.mps.is_available()
     else "cpu")
 
-# load empty densenet201 model
-model = torch.hub.load('pytorch/vision:v0.10.0', 'densenet121', weights = None)
-
-# create dataset object
-tree_dataset = TrainDataset_testing(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec\downsampled")
-
-# create data loader
-batch_size = 2
-data_loader = torch.utils.data.DataLoader(tree_dataset, batch_size, collate_fn = collate_fn)
-
-# for tensor, label in data_loader:  
-#     sample_image = tensor   # Reshape them according to your needs.
-#     sample_label = label
-#     break
-#%%
-
-
-# Define the transform to apply to the images
-transform = transforms.Compose([
-    transforms.Resize((256, 256)),
-    transforms.ToTensor(),
-    transforms.Normalize((0.5,), (0.5,))
-])
-
-
-# Define the dataset and data loader
-dataset = TrainDataset_testing(r"D:\TLS\Puliti_Reference_Dataset\train_labels.csv", r"D:\\TLS\Puliti_Reference_Dataset", transform = transform)
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True, collate_fn = collate_fn)
-
-# Define the model
-model = torchvision.models.densenet201(pretrained=True)
-num_ftrs = model.classifier.in_features
-model.classifier = torch.nn.Linear(num_ftrs, 33)
-
 # give to
 model.to(device)
+# dataloader.to(device)
 
 # Define the loss function and optimizer
 criterion = torch.nn.CrossEntropyLoss()
@@ -254,3 +268,20 @@ for epoch in range(num_epochs):
             running_loss = 0.0
 
 print('Finished training')
+# %%
+from PIL import Image
+from torchvision import transforms
+input_image = Image.open(r"C:\Users\Julian\Desktop\Poster Auswahl\DSC10447.JPG")
+preprocess = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+input_tensor = preprocess(input_image)
+input_batch = input_tensor.unsqueeze(0)
+input_batch = input_batch.to('cuda')
+with torch.no_grad():
+    output = model(input_batch)
+# Tensor of shape 1000, with confidence scores over Imagenet's 1000 classes
+print(output[0])
