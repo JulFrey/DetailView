@@ -186,7 +186,7 @@ def collate_fn(list_items):
           y = torch.cat((y, torch.tensor([X["species"]])), dim = 0)
           
      x = x.to("cuda", non_blocking=True, dtype=torch.float)
-     y = y.to("cuda", non_blocking=True)
+     y = y.to("cuda", non_blocking=True, dtype=torch.int64)
      return x, y
  
 # found a more ellegant sollution need to test:
@@ -206,9 +206,9 @@ def collate_fn(list_items):
 tree_dataset = TrainDataset_testing(r"V:\3D4EcoTec\train_labels.csv", r"V:\3D4EcoTec\down")
 
 # # create data loader
-batch_size = 4
+batch_size = 20
 data_loader = torch.utils.data.DataLoader(tree_dataset, batch_size, collate_fn = collate_fn, shuffle = True)
-images, labels = next(iter(data_loader))
+#images, labels = next(iter(data_loader))
 
 #%%
 
@@ -221,9 +221,9 @@ trafo = transforms.Compose([
 
 # Define the dataset and data loader
 dataset = TrainDataset_testing(r"V:\3D4EcoTec\train_labels.csv", r"D:\TLS\Puliti_Reference_Dataset\down")
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=20, shuffle=True, collate_fn = collate_fn) #num_workers=5 ,, pin_memory=True
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn = collate_fn) #num_workers=5 ,, pin_memory=True
 
-images, labels = next(iter(dataloader))
+#images, labels = next(iter(dataloader))
 
 # %%
 
@@ -257,7 +257,7 @@ for epoch in range(num_epochs):
     running_loss = 0.0
     
     for i, data in enumerate(dataloader, 0):
-        print(i)
+        if i % 10 == 9: print(i / (dataset.__len__() / batch_size) )
         inputs, labels = data
         
         # Zero the parameter gradients
