@@ -112,7 +112,7 @@ data_transform = transforms.Compose([
     ])
 
 # create dataset object
-tree_dataset = TrainDataset(r"V:\3D4EcoTec\train_labels.csv", r"V:\3D4EcoTec", img_trans = data_transform) 
+tree_dataset = TrainDataset(r"V:\3D4EcoTec\train_labels.csv", r"V:\3D4EcoTec\down", img_trans = data_transform) 
 
 # visualizing  sample
 test = tree_dataset[1]
@@ -156,6 +156,7 @@ class TrainDataset_testing():
         las_name = os.path.join(
             self.root_dir,
             *self.trees_frame.iloc[idx, 0].split('/'))
+        # print(las_name)
         views = sv.points_to_images(au.augment(las_name))
         
         # get side view
@@ -177,7 +178,7 @@ def collate_fn(list_items):
           x = torch.cat((x, torch.unsqueeze(X["views"], dim = 0)), dim = 0)
           y = torch.cat((y, torch.tensor([X["species"]])), dim = 0)
           
-     x = x.to("cuda", non_blocking=True)
+     x = x.to("cuda", non_blocking=True, dtype=torch.float)
      y = y.to("cuda", non_blocking=True)
      return x, y
  
@@ -195,11 +196,11 @@ def collate_fn(list_items):
 # model = torch.hub.load('pytorch/vision:v0.10.0', 'densenet121', weights = None)
 
 # # create dataset object
-tree_dataset = TrainDataset_testing(r"V:\3D4EcoTec\train_labels.csv", r"V:\3D4EcoTec")
+tree_dataset = TrainDataset_testing(r"V:\3D4EcoTec\train_labels.csv", r"V:\3D4EcoTec\down")
 
 # # create data loader
 batch_size = 4
-data_loader = torch.utils.data.DataLoader(tree_dataset, batch_size, collate_fn = collate_fn)
+data_loader = torch.utils.data.DataLoader(tree_dataset, batch_size, collate_fn = collate_fn, shuffle = True)
 images, labels = next(iter(data_loader))
 
 #%%
@@ -212,8 +213,8 @@ trafo = transforms.Compose([
 
 
 # Define the dataset and data loader
-dataset = TrainDataset_testing(r"V:\3D4EcoTec\train_labels.csv", r"V:\3D4EcoTec")
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=6, shuffle=True, collate_fn = collate_fn) #num_workers=5 ,, pin_memory=True
+dataset = TrainDataset_testing(r"V:\3D4EcoTec\train_labels.csv", r"V:\3D4EcoTec\down")
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=20, shuffle=True, collate_fn = collate_fn) #num_workers=5 ,, pin_memory=True
 
 images, labels = next(iter(dataloader))
 
@@ -249,6 +250,7 @@ for epoch in range(num_epochs):
     running_loss = 0.0
     
     for i, data in enumerate(dataloader, 0):
+        print(i)
         inputs, labels = data
         
         # Zero the parameter gradients

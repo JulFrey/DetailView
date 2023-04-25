@@ -18,7 +18,7 @@ path_las = r"D:\Baumartenklassifizierung\data\processed\03498.las"
 
 #%%
 
-def points_to_images(points, res_im = 256, num_side = 4, plot = False):
+def points_to_images(points, res_im = 256, num_side = 4, plot = False, debug = False):
     
     """
     Parameters
@@ -49,21 +49,25 @@ def points_to_images(points, res_im = 256, num_side = 4, plot = False):
     views = np.zeros((num_side + 3, res_im, res_im))
     
     # add DBH section view
-    views[num_side + 2,:,:] = sectionview(points, res_im = res_im, plot = plot)
+    if debug: print('create dbh section view')
+    views[num_side + 2,:,:] = sectionview(points, res_im = res_im, plot = plot, debug = debug)
     
     # center point cloud
+    if debug: print('center point cloud')
     points = points - np.median(points, axis = 0)
     
     # scale point cloud
+    if debug: print('scale point cloud')
     points = points / np.max(abs(points))    
     
     # add top view
+    if debug: print('create top view')
     views[0,:,:] = topview(points, res_im = res_im, plot = plot)
     
     # loop through perspectives
     deg_steps = np.linspace(0, 180, num = num_side)
     for i in range(num_side):
-        
+        if debug: print('sideview: ' + str(i))
         # get required rotation
         deg = deg_steps[i]
         
@@ -81,6 +85,7 @@ def points_to_images(points, res_im = 256, num_side = 4, plot = False):
         views[i+1,:,:] = sideview(points_rot, res_im = res_im, plot = plot)
     
     # add bottom view
+    if debug: print('bottom view')
     views[num_side + 1,:,:] = topview(points, res_im = res_im, inverse = True, plot = plot)
     
     # return
@@ -235,7 +240,7 @@ def sideview(points, res_im = 256, plot = False):
 
 
 # creating sideview
-def sectionview(points, res_im = 256, plot = False):
+def sectionview(points, res_im = 256, plot = False, debug = False):
     
     """
     Parameters
@@ -255,10 +260,11 @@ def sectionview(points, res_im = 256, plot = False):
     
     # extract DBH section
     section = points[(points[:,2] < 1.5) & (points[:,2] > 1),:]
+    if debug: print('n points in section section: ' + str(section.shape))
     
     # skip if section nearly empty
     if section.shape[0] > 50:
-        
+    
         # set up the clustering algorithm
         dbscan = DBSCAN(eps = 0.10, min_samples = 10)
         
@@ -267,9 +273,11 @@ def sectionview(points, res_im = 256, plot = False):
         
         # get largest cluster
         labels = dbscan.labels_
-        largest_cluster_label = np.argmax(np.bincount(labels[labels!=-1]))
-        largest_cluster_indices = np.where(labels == largest_cluster_label)[0]
-        section = section[largest_cluster_indices]
+        # catch if no cluster > 10 points is found
+        if not (np.array(labels) == -1).all():
+            largest_cluster_label = np.argmax(np.bincount(labels[labels!=-1]))
+            largest_cluster_indices = np.where(labels == largest_cluster_label)[0]
+            section = section[largest_cluster_indices]
     
         # center point cloud
         section = section - np.median(section, axis = 0)
