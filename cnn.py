@@ -33,20 +33,19 @@ exists = []
 for p in r'V:\3D4EcoTec\down' + labels['filename']:
     exists.append(os.path.exists(p))
 
-labels = labels[pd.Series(exists)]
-
 # initialize LabelEncoder object
 le = LabelEncoder()
 
 # transform the string labels to integer labels
-labels = pd.concat([labels, pd.DataFrame(le.fit_transform(labels['species']), columns=["species_id"])], axis = 1)
-labels = labels[['filename', 'species_id', 'tree_H']]
+labels2 = pd.concat([labels, pd.DataFrame(le.fit_transform(labels['species']), columns=["species_id"])], axis = 1)
+labels2 = labels2[['filename', 'species_id', 'tree_H']]
 
 # TODO: change path to downsampled point clouds?
 # TODO: exclude super small point clouds
+labels2 = labels2[pd.Series(exists)]
 
 # save new label data frame
-labels.to_csv(r"V:\3D4EcoTec\train_labels.csv", index = False)
+labels2.to_csv(r"V:\3D4EcoTec\train_labels.csv", index = False)
 
 #%%
 
@@ -176,7 +175,7 @@ class TrainDataset_testing():
         
         # return images with labels
         return {'views': views,
-                'species': self.trees_frame.iloc[idx, 1]}
+                'species': self.trees_frame.iloc[idx, 1] + 1}
 
 def collate_fn(list_items):
      x = torch.unsqueeze(list_items[0]["views"], dim = 0)
@@ -232,7 +231,7 @@ model = torchvision.models.densenet201(weights='DenseNet201_Weights.DEFAULT')
 # model.features[0]
 # model.features[0] = torch.nn.Conv2d(1, 256, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
 num_ftrs = model.classifier.in_features
-model.classifier = torch.nn.Linear(num_ftrs, 33)
+model.classifier = torch.nn.Linear(num_ftrs, int(len(le.classes_)+1))
 
 # get the cuda device
 device = (
@@ -277,20 +276,3 @@ for epoch in range(num_epochs):
             running_loss = 0.0
 
 print('Finished training')
-# %%
-from PIL import Image
-from torchvision import transforms
-input_image = Image.open(r"C:\Users\Julian\Desktop\Poster Auswahl\DSC10447.JPG")
-preprocess = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
-input_tensor = preprocess(input_image)
-input_batch = input_tensor.unsqueeze(0)
-input_batch = input_batch.to('cuda')
-with torch.no_grad():
-    output = model(input_batch)
-# Tensor of shape 1000, with confidence scores over Imagenet's 1000 classes
-print(output[0])
