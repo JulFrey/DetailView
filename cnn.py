@@ -28,6 +28,13 @@ import sideview as sv
 # read the csv file with labels to convert
 labels = pd.read_csv(r"V:\3D4EcoTec\tree_metadata_training_publish.csv")
 
+# check if files exist
+exists = []
+for p in r'V:\3D4EcoTec\down' + labels['filename']:
+    exists.append(os.path.exists(p))
+
+labels = labels[pd.Series(exists)]
+
 # initialize LabelEncoder object
 le = LabelEncoder()
 
@@ -213,7 +220,7 @@ trafo = transforms.Compose([
 
 
 # Define the dataset and data loader
-dataset = TrainDataset_testing(r"V:\3D4EcoTec\train_labels.csv", r"V:\3D4EcoTec\down")
+dataset = TrainDataset_testing(r"V:\3D4EcoTec\train_labels.csv", r"D:\TLS\Puliti_Reference_Dataset\down")
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=20, shuffle=True, collate_fn = collate_fn) #num_workers=5 ,, pin_memory=True
 
 images, labels = next(iter(dataloader))
