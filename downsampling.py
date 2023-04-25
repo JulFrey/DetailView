@@ -113,7 +113,7 @@ def downsample(path_las, path_out, res_pc = 0.01, min_n = 100):
     # setting up downsample
     las_reader = pdal.Reader(path_las)
     las_filter = pdal.Filter(type = "filters.voxelcentroidnearestneighbor", cell = res_pc)
-    las_writer = pdal.Writer(path_out_full)
+    las_writer = pdal.Writer(path_out_full, dataformat_id = 0)
     
     # get number of points
     pipeline = pdal.Pipeline([las_reader])
