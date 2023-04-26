@@ -20,7 +20,7 @@ from torchvision import transforms
 import augmentation as au
 import sideview as sv
 
-# %% prepare labels
+#%% prepare labels
 
 # read the csv file with labels to convert
 labels = pd.read_csv(r"S:\3D4EcoTec\tree_metadata_training_publish.csv")
@@ -42,6 +42,8 @@ labels = labels[pd.Series(exists)]
 
 # save new label data frame
 labels.to_csv(r"S:\3D4EcoTec\train_labels.csv", index = False)
+
+# TODO: split in training & validation data
 
 #%% prepare dataset class
 
@@ -100,7 +102,7 @@ class TrainDataset_AllChannels():
         # return images with labels
         return image, height, label
 
-# %% test dataset class without augmentation
+#%% test dataset class without augmentation
 
 # create dataset object
 dataset = TrainDataset_AllChannels(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec")

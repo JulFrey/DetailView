@@ -45,10 +45,6 @@ def augment(path_las, rotate_h_max = 22.5, rotate_v_max = 180,
     # read in las file
     points = rl.read_las(path_las)
     
-    # turn coordinates into numpy array
-    #points = np.stack((las.X, las.Y, las.Z), axis = 1)
-    #points = points * las.header.scale
-    
     # sub-sampling
     s_num = int((1 - sampling_max) * points.shape[0])
     s_idx = np.random.choice(np.arange(points.shape[0]), s_num, replace = False)
@@ -85,19 +81,9 @@ def augment(path_las, rotate_h_max = 22.5, rotate_v_max = 180,
     # apply transformation
     points = np.matmul(points, transform.T)
     
-    # # create a new las file
-    # new_header = lp.LasHeader(point_format = 0, version = "1.2")
-    # new_header.offsets = las.header.offset
-    # new_header.scales = las.header.scale
-    # new_las = lp.LasData(new_header)
-    # new_las.x = points[:,0]
-    # new_las.y = points[:,1]
-    # new_las.z = points[:,2]
-        
-    # # write augmented las
-    # path_out_full = os.path.join(path_out, os.path.basename(path_las))
-    # new_las.write(path_out_full)
-        
+    # recenter bottom to 0m height
+    points = points[:,2] - np.min(points[:,2])
+    
     # return path
     return points
 

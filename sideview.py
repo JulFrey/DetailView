@@ -8,7 +8,7 @@ Created on Tue Apr 18 08:55:35 2023
 # import packages
 # import os
 # import glob
-# import laspy as lp
+# import read_las as rl
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
@@ -39,11 +39,7 @@ def points_to_images(points, res_im = 256, num_side = 4, plot = False, debug = F
     """
     
     # # read in las file
-    # las = lp.read(path_las)
-    
-    # # turn coordinates into numpy array
-    # points = np.stack((las.X, las.Y, las.Z), axis = 1)
-    # points = points * las.header.scale
+    # las = rl.read_las(path_las)
     
     # prepare view array
     views = np.zeros((num_side + 3, res_im, res_im))
@@ -273,6 +269,7 @@ def sectionview(points, res_im = 256, plot = False, debug = False):
         
         # get largest cluster
         labels = dbscan.labels_
+        
         # catch if no cluster > 10 points is found
         if not (np.array(labels) == -1).all():
             largest_cluster_label = np.argmax(np.bincount(labels[labels!=-1]))
