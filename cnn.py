@@ -20,34 +20,30 @@ from torchvision import transforms
 import augmentation as au
 import sideview as sv
 
-# # get model input for one point cloud
-# pts = au.augment(r"D:\Baumartenklassifizierung\data\train_downsampled\03498.las")
-# views = sv.points_to_images(pts)
-# tensor = torch.tensor(views)
+# %% prepare labels
 
 # read the csv file with labels to convert
-labels = pd.read_csv(r"V:\3D4EcoTec\tree_metadata_training_publish.csv")
-
-# check if files exist
-exists = []
-for p in r'V:\3D4EcoTec\down' + labels['filename']:
-    exists.append(os.path.exists(p))
+labels = pd.read_csv(r"S:\3D4EcoTec\tree_metadata_training_publish.csv")
 
 # initialize LabelEncoder object
 le = LabelEncoder()
 
 # transform the string labels to integer labels
-labels2 = pd.concat([labels, pd.DataFrame(le.fit_transform(labels['species']), columns=["species_id"])], axis = 1)
-labels2 = labels2[['filename', 'species_id', 'tree_H']]
+labels = pd.concat([labels, pd.DataFrame(le.fit_transform(labels['species']), columns = ["species_id"])], axis = 1)
+labels = labels[['filename', 'species_id', 'tree_H']]
 
-# TODO: change path to downsampled point clouds?
-# TODO: exclude super small point clouds
-labels2 = labels2[pd.Series(exists)]
+# check if files exist
+exists = []
+for p in r'S:\3D4EcoTec\down' + labels['filename']:
+    exists.append(os.path.exists(p))
+
+# exclude rows refering to not existing files
+labels = labels[pd.Series(exists)]
 
 # save new label data frame
-labels2.to_csv(r"V:\3D4EcoTec\train_labels.csv", index = False)
+labels.to_csv(r"S:\3D4EcoTec\train_labels.csv", index = False)
 
-#%%
+#%% prepare dataset class
 
 # create dataset class to load the data from csv and las files
 class TrainDataset():
@@ -55,7 +51,7 @@ class TrainDataset():
     """Tree species dataset."""
     
     # initialization
-    def __init__(self, csv_file, root_dir, img_trans = None): # TODO: change variable name to not overwrite loaded function?
+    def __init__(self, csv_file, root_dir, img_trans = None):
         
         """
         Arguments:
@@ -100,38 +96,38 @@ class TrainDataset():
                 'species': self.trees_frame.iloc[idx, 1],
                 'height': self.trees_frame.iloc[idx, 2]}
 
-# %%
+# %% test dataset class without augmentation
 
 # create dataset object
-tree_dataset = TrainDataset(r"V:\3D4EcoTec\train_labels.csv", r"V:\3D4EcoTec")
+dataset = TrainDataset(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec")
 
 # visualizing  sample
-test = tree_dataset[1]
+test = dataset[1]
 plt.imshow(test["views"][0,:,:], interpolation = 'nearest')
 plt.show()
 
-#%%
+#%% test dataset class with augmentation
 
 # setting up image augmentation
-data_transform = transforms.Compose([
+trafo = transforms.Compose([
     transforms.RandomCrop(200)
     ])
 
 # create dataset object
-tree_dataset = TrainDataset(r"V:\3D4EcoTec\train_labels.csv", r"V:\3D4EcoTec\down", img_trans = data_transform) 
+dataset = TrainDataset(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec\down", img_trans = trafo) 
 
 # visualizing  sample
-test = tree_dataset[1]
+test = dataset[1]
 plt.imshow(test["views"][0,:,:], interpolation = 'nearest')
 plt.show()
 
-# %%
+#%% set up new dataset class for testing
 
 class TrainDataset_testing():
     """Tree species dataset."""
 
     # initialization
-    def __init__(self, csv_file, root_dir, img_trans = None): # TODO: change variable name to not overwrite loaded function?
+    def __init__(self, csv_file, root_dir, img_trans = None):
         
         """
         Arguments:
@@ -162,12 +158,10 @@ class TrainDataset_testing():
         las_name = os.path.join(
             self.root_dir,
             *self.trees_frame.iloc[idx, 0].split('/'))
-        # print(las_name)
         views = sv.points_to_images(au.augment(las_name))
         
         # get side view
         views = torch.from_numpy(views[0:3,:,:])
-        # views = Image.fromarray(views[0:3,:,:])
         
         # augment images
         if self.img_trans:
@@ -177,18 +171,27 @@ class TrainDataset_testing():
         return {'views': views,
                 'species': self.trees_frame.iloc[idx, 1] + 1}
 
+#%% set up collate function for dataloader
+
 def collate_fn(list_items):
+    
+    # use first items to set up objects
      x = torch.unsqueeze(list_items[0]["views"], dim = 0)
      y = torch.tensor([list_items[0]["species"]])
+     
+     # append objects
      for X in list_items[1:]:
           x = torch.cat((x, torch.unsqueeze(X["views"], dim = 0)), dim = 0)
           y = torch.cat((y, torch.tensor([X["species"]])), dim = 0)
-          
+    
+     # send opjects to device
      x = x.to("cuda", non_blocking=True, dtype=torch.float)
      y = y.to("cuda", non_blocking=True, dtype=torch.int64)
+     
+     # return objects
      return x, y
  
-# found a more ellegant sollution need to test:
+# found a more elegant solution need to test:
 # def collator(batch):
 #     X, Y = [], []
 #     for x, y in batch:
@@ -196,42 +199,49 @@ def collate_fn(list_items):
 #         Y += [y, ]
 #     return torch.stack(X), torch.stack(Y)
 
-#%%
+#%% test dataloader without augmentation
 
-# # load empty densenet201 model
-# model = torch.hub.load('pytorch/vision:v0.10.0', 'densenet121', weights = None)
+# create dataset object
+dataset = TrainDataset_testing(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec\down")
 
-# # create dataset object
-tree_dataset = TrainDataset_testing(r"V:\3D4EcoTec\train_labels.csv", r"V:\3D4EcoTec\down")
+# create data loader
+batch_size = 16
+dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, collate_fn = collate_fn, shuffle = True)
 
-# # create data loader
-batch_size = 20
-data_loader = torch.utils.data.DataLoader(tree_dataset, batch_size, collate_fn = collate_fn, shuffle = True)
-#images, labels = next(iter(data_loader))
+# # test output of iterator
+# images, labels = next(iter(dataloader))
+# print(images); print(labels)
 
-#%%
+#%% test dataloader with augmentation
 
-# Define the transform to apply to the images
+# setting up image augmentation
 trafo = transforms.Compose([
-    transforms.Resize(64),
+    transforms.ToPILImage(),
+    transforms.Resize(64), # for testing the model
     transforms.ToTensor()
 ])
 
+# create dataset object
+dataset = TrainDataset_testing(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec\down", img_trans = trafo)
 
-# Define the dataset and data loader
-dataset = TrainDataset_testing(r"V:\3D4EcoTec\train_labels.csv", r"D:\TLS\Puliti_Reference_Dataset\down")
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn = collate_fn) #num_workers=5 ,, pin_memory=True
+# create data loader
+batch_size = 16
+dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, collate_fn = collate_fn, shuffle = True) # num_workers = 5, pin_memory = True
 
-#images, labels = next(iter(dataloader))
+# # test output of iterator
+# images, labels = next(iter(dataloader))
+# print(images); print(labels)
 
-# %%
+#%% training cnn
 
-# Define the model
-model = torchvision.models.densenet201(weights='DenseNet201_Weights.DEFAULT')
+# load the model
+model = torchvision.models.densenet201(weights = 'DenseNet201_Weights.DEFAULT')
+
+# change first & last layer
 # model.features[0]
-# model.features[0] = torch.nn.Conv2d(1, 256, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+# model.features[0] = torch.nn.Conv2d(1, 256, kernel_size = (7, 7), stride = (2, 2), padding = (3, 3), bias = False)
 num_ftrs = model.classifier.in_features
-model.classifier = torch.nn.Linear(num_ftrs, int(len(le.classes_)+1))
+model.classifier = torch.nn.Linear(num_ftrs, int(len(le.classes_) + 1))
 
 # get the cuda device
 device = (
@@ -241,34 +251,33 @@ device = (
     if torch.backends.mps.is_available()
     else "cpu")
 
-# give to
+# give to devise
 model.to(device)
-# dataloader.to(device)
 
-# Define the loss function and optimizer
+# define loss function and optimizer
 criterion = torch.nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
 
-# Train the model
+# train the model
 num_epochs = 10
 
 for epoch in range(num_epochs):
     running_loss = 0.0
     
     for i, data in enumerate(dataloader, 0):
-        if i % 10 == 9: print(i / (dataset.__len__() / batch_size) )
+        if i % 10 == 9: print(i / (len(dataset) / batch_size) )
         inputs, labels = data
         
-        # Zero the parameter gradients
+        # zero the parameter gradients
         optimizer.zero_grad()
         
-        # Forward + backward + optimize
+        # forward + backward + optimize
         outputs = model(inputs)
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
         
-        # Print statistics
+        # print statistics
         running_loss += loss.item()
         if i % 100 == 99:
             print('[%d, %5d] loss: %.3f' %
