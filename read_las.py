@@ -29,9 +29,6 @@ def read_las(path_las):
     pipeline = pdal.Pipeline([pdal.Reader(path_las, type = "readers.las")])
     pipeline.execute()
     
-    # convert to numpy array
-    data = pipeline.arrays[0]
-    data = np.stack((data['X'], data['Y'], data['Z']), axis = 1)
-    
     # return numpy array
-    return data
+    data = pipeline.arrays[0]
+    return np.stack((data['X'], data['Y'], data['Z']), axis = 1)

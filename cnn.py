@@ -160,8 +160,8 @@ class TrainDataset_testing():
             *self.trees_frame.iloc[idx, 0].split('/'))
         views = sv.points_to_images(au.augment(las_name))
         
-        # get side view
-        views = torch.from_numpy(views[0:3,:,:])
+        # get side & top views
+        views = torch.from_numpy(views[0,:,:])
         
         # augment images
         if self.img_trans:
@@ -173,24 +173,25 @@ class TrainDataset_testing():
 
 #%% set up collate function for dataloader
 
+# alternativ können wir auch die class besser schreiben
+
 def collate_fn(list_items):
     
-    # use first items to set up objects
-     x = torch.unsqueeze(list_items[0]["views"], dim = 0)
-     y = torch.tensor([list_items[0]["species"]])
-     
-     # append objects
-     for X in list_items[1:]:
-          x = torch.cat((x, torch.unsqueeze(X["views"], dim = 0)), dim = 0)
-          y = torch.cat((y, torch.tensor([X["species"]])), dim = 0)
+    # get list items
+    x_list = [item["views"] for item in list_items]
+    y_list = [item["species"] for item in list_items]
     
-     # send opjects to device
-     x = x.to("cuda", non_blocking=True, dtype=torch.float)
-     y = y.to("cuda", non_blocking=True, dtype=torch.int64)
-     
-     # return objects
-     return x, y
- 
+    # stack items
+    x = torch.stack(x_list, dim = 0)
+    y = torch.tensor(y_list)
+    
+    # send opjects to device
+    x = x.to("cuda", non_blocking = True, dtype = torch.float)
+    y = y.to("cuda", non_blocking = True, dtype = torch.int64)
+    
+    # return objects
+    return x, y
+
 # found a more elegant solution need to test:
 # def collator(batch):
 #     X, Y = [], []
@@ -198,6 +199,7 @@ def collate_fn(list_items):
 #         X += [x, ]
 #         Y += [y, ]
 #     return torch.stack(X), torch.stack(Y)
+# ... aber das schickt es nicht zu cuda
 
 #%% test dataloader without augmentation
 
@@ -235,15 +237,14 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, colla
 #%% training cnn
 
 # load the model
-model = torchvision.models.densenet201(weights = 'DenseNet201_Weights.DEFAULT')
+model = torchvision.models.densenet201() # weights = 'DenseNet201_Weights.DEFAULT')
 
 # change first & last layer
-# model.features[0]
-# model.features[0] = torch.nn.Conv2d(1, 256, kernel_size = (7, 7), stride = (2, 2), padding = (3, 3), bias = False)
+model.features[0] = torch.nn.Conv2d(1, 64, kernel_size = (7, 7), stride = (2, 2), padding = (3, 3), bias = False) # change number of input channels
 num_ftrs = model.classifier.in_features
 model.classifier = torch.nn.Linear(num_ftrs, int(len(le.classes_) + 1))
 
-# get the cuda device
+# get the device
 device = (
     "cuda"
     if torch.cuda.is_available()
@@ -258,14 +259,20 @@ model.to(device)
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
 
-# train the model
-num_epochs = 10
-
+# loop through epochs
+num_epochs = 2
 for epoch in range(num_epochs):
+    
+    #  model.train() # ich check pytorch nicht, aber sollte das nicht irgendwo auftauchen?
     running_loss = 0.0
     
-    for i, data in enumerate(dataloader, 0):
-        if i % 10 == 9: print(i / (len(dataset) / batch_size) )
+    # loop through whole dataset?
+    for i, data in enumerate(dataloader, 0): 
+        
+        # print progress?
+        # if i % 10 == 9: print(i / (len(dataset) / batch_size))
+        
+        # load data
         inputs, labels = data
         
         # zero the parameter gradients
@@ -277,7 +284,7 @@ for epoch in range(num_epochs):
         loss.backward()
         optimizer.step()
         
-        # print statistics
+        # print statistics every 100 batches
         running_loss += loss.item()
         if i % 100 == 99:
             print('[%d, %5d] loss: %.3f' %
