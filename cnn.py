@@ -46,7 +46,7 @@ labels.to_csv(r"S:\3D4EcoTec\train_labels.csv", index = False)
 #%% prepare dataset class
 
 # create dataset class to load the data from csv and las files
-class TrainDataset():
+class TrainDataset_AllChannels():
     
     """Tree species dataset."""
     
@@ -82,52 +82,56 @@ class TrainDataset():
         las_name = os.path.join(
             self.root_dir,
             *self.trees_frame.iloc[idx, 0].split('/'))
-        views = sv.points_to_images(au.augment(las_name))
+        image = sv.points_to_images(au.augment(las_name))
         
         # get side views
-        views = torch.from_numpy(views)
+        image = torch.from_numpy(image)
         
         # augment images
         if self.img_trans:
-            views = self.img_trans(views)
+            image = self.img_trans(image)
+        
+        # get height
+        height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype = torch.float)
+        
+        # get species
+        label = torch.tensor(self.trees_frame.iloc[idx, 1] + 1, dtype = torch.int64)
         
         # return images with labels
-        return {'views': views,
-                'species': self.trees_frame.iloc[idx, 1],
-                'height': self.trees_frame.iloc[idx, 2]}
+        return image, height, label
 
 # %% test dataset class without augmentation
 
 # create dataset object
-dataset = TrainDataset(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec")
+dataset = TrainDataset_AllChannels(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec")
 
 # visualizing  sample
 test = dataset[1]
-plt.imshow(test["views"][0,:,:], interpolation = 'nearest')
+plt.imshow(test[0][0,:,:], interpolation = 'nearest')
 plt.show()
 
 #%% test dataset class with augmentation
 
 # setting up image augmentation
 trafo = transforms.Compose([
-    transforms.RandomCrop(200)
+    transforms.RandomCrop(200),
     ])
 
 # create dataset object
-dataset = TrainDataset(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec\down", img_trans = trafo) 
+dataset = TrainDataset_AllChannels(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec\down", img_trans = trafo) 
 
 # visualizing  sample
 test = dataset[1]
-plt.imshow(test["views"][0,:,:], interpolation = 'nearest')
+plt.imshow(test[0][0,:,:], interpolation = 'nearest')
 plt.show()
 
 #%% set up new dataset class for testing
 
-class TrainDataset_testing():
+class TrainDataset_SingleChannel():
     """Tree species dataset."""
 
     # initialization
-    def __init__(self, csv_file, root_dir, img_trans = None):
+    def __init__(self, csv_file, root_dir, img_trans = None, channel = 0):
         
         """
         Arguments:
@@ -142,6 +146,7 @@ class TrainDataset_testing():
         self.trees_frame = pd.read_csv(csv_file)
         self.root_dir    = root_dir
         self.img_trans   = img_trans
+        self.channel     = channel
     
     # length
     def __len__(self):
@@ -158,61 +163,41 @@ class TrainDataset_testing():
         las_name = os.path.join(
             self.root_dir,
             *self.trees_frame.iloc[idx, 0].split('/'))
-        views = sv.points_to_images(au.augment(las_name))
+        image = sv.points_to_images(au.augment(las_name))
         
-        # get side & top views
-        views = torch.from_numpy(views[0,:,:])
+        # get selected side & top views
+        image = torch.from_numpy(image[self.channel,:,:])
+        image = torch.unsqueeze(image, dim = 0)
         
         # augment images
         if self.img_trans:
-            views = self.img_trans(views)
+            image = self.img_trans(image)
+        
+        # get height
+        height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype = torch.float)
+        
+        # get species
+        label = torch.tensor(self.trees_frame.iloc[idx, 1] + 1, dtype = torch.int64)
         
         # return images with labels
-        return {'views': views,
-                'species': self.trees_frame.iloc[idx, 1] + 1}
-
-#%% set up collate function for dataloader
-
-# alternativ können wir auch die class besser schreiben
-
-def collate_fn(list_items):
-    
-    # get list items
-    x_list = [item["views"] for item in list_items]
-    y_list = [item["species"] for item in list_items]
-    
-    # stack items
-    x = torch.stack(x_list, dim = 0)
-    y = torch.tensor(y_list)
-    
-    # send opjects to device
-    x = x.to("cuda", non_blocking = True, dtype = torch.float)
-    y = y.to("cuda", non_blocking = True, dtype = torch.int64)
-    
-    # return objects
-    return x, y
-
-# found a more elegant solution need to test:
-# def collator(batch):
-#     X, Y = [], []
-#     for x, y in batch:
-#         X += [x, ]
-#         Y += [y, ]
-#     return torch.stack(X), torch.stack(Y)
-# ... aber das schickt es nicht zu cuda
+        return image, height, label
 
 #%% test dataloader without augmentation
 
 # create dataset object
-dataset = TrainDataset_testing(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec\down")
+dataset = TrainDataset_SingleChannel(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec\down")
 
 # create data loader
 batch_size = 16
-dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, collate_fn = collate_fn, shuffle = True)
+dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, shuffle = True)
 
 # # test output of iterator
-# images, labels = next(iter(dataloader))
-# print(images); print(labels)
+# image, height, label = next(iter(dataloader))
+# print(image.shape); print(height.shape); print(label.shape)
+
+# # show image
+# plt.imshow(image[0,0,:,:], interpolation = 'nearest')
+# plt.show()
 
 #%% test dataloader with augmentation
 
@@ -224,15 +209,19 @@ trafo = transforms.Compose([
 ])
 
 # create dataset object
-dataset = TrainDataset_testing(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec\down", img_trans = trafo)
+dataset = TrainDataset_SingleChannel(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec\down", img_trans = trafo)
 
 # create data loader
 batch_size = 16
-dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, collate_fn = collate_fn, shuffle = True) # num_workers = 5, pin_memory = True
+dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, shuffle = True) # num_workers = 5, pin_memory = True
 
 # # test output of iterator
-# images, labels = next(iter(dataloader))
-# print(images); print(labels)
+# image, height, label = next(iter(dataloader))
+# print(image.shape); print(height.shape); print(label.shape)
+
+# # show image
+# plt.imshow(image[0,0,:,:], interpolation = 'nearest')
+# plt.show()
 
 #%% training cnn
 
@@ -269,11 +258,14 @@ for epoch in range(num_epochs):
     # loop through whole dataset?
     for i, data in enumerate(dataloader, 0): 
         
-        # print progress?
-        # if i % 10 == 9: print(i / (len(dataset) / batch_size))
-        
+        # print progress every ten batches
+        if i % 10 == 9:
+            progress = (i / (len(dataset) / batch_size))
+            print('[epoch: %d] dataset: %.2f%%' %
+                  (epoch + 1, progress * 100))
         # load data
-        inputs, labels = data
+        inputs, height, labels = data
+        inputs, labels = inputs.to("cuda"), labels.to("cuda")
         
         # zero the parameter gradients
         optimizer.zero_grad()
@@ -287,7 +279,7 @@ for epoch in range(num_epochs):
         # print statistics every 100 batches
         running_loss += loss.item()
         if i % 100 == 99:
-            print('[%d, %5d] loss: %.3f' %
+            print('[epoch: %d, batch: %5d] loss: %.3f' %
                   (epoch + 1, i + 1, running_loss / 100))
             running_loss = 0.0
 
