@@ -14,36 +14,13 @@ import matplotlib.pyplot as plt
 import torchvision
 from sklearn.preprocessing import LabelEncoder
 from torchvision import transforms
-#from skimage import io, transform
 
 # import own functions
 import augmentation as au
 import sideview as sv
 
-#%% prepare labels
-
-# read the csv file with labels to convert
-labels = pd.read_csv(r"S:\3D4EcoTec\tree_metadata_training_publish.csv")
-
-# initialize LabelEncoder object
-le = LabelEncoder()
-
-# transform the string labels to integer labels
-labels = pd.concat([labels, pd.DataFrame(le.fit_transform(labels['species']), columns = ["species_id"])], axis = 1)
-labels = labels[['filename', 'species_id', 'tree_H']]
-
-# check if files exist
-exists = []
-for p in r'S:\3D4EcoTec\down' + labels['filename']:
-    exists.append(os.path.exists(p))
-
-# exclude rows refering to not existing files
-labels = labels[pd.Series(exists)]
-
-# save new label data frame
-labels.to_csv(r"S:\3D4EcoTec\train_labels.csv", index = False)
-
-# TODO: split in training & validation data
+# set  number of classess
+n_class = 33
 
 #%% prepare dataset class
 
@@ -233,7 +210,7 @@ model = torchvision.models.densenet201() # weights = 'DenseNet201_Weights.DEFAUL
 # change first & last layer
 model.features[0] = torch.nn.Conv2d(1, 64, kernel_size = (7, 7), stride = (2, 2), padding = (3, 3), bias = False) # change number of input channels
 num_ftrs = model.classifier.in_features
-model.classifier = torch.nn.Linear(num_ftrs, int(len(le.classes_) + 1))
+model.classifier = torch.nn.Linear(num_ftrs, int(n_class + 1))
 
 # get the device
 device = (
