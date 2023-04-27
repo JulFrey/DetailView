@@ -82,7 +82,7 @@ def augment(path_las, rotate_h_max = 22.5, rotate_v_max = 180,
     points = np.matmul(points, transform.T)
     
     # recenter bottom to 0m height
-    points = points[:,2] - np.min(points[:,2])
+    points[:,2] = points[:,2] - np.min(points[:,2])
     
     # return path
     return points
