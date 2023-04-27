@@ -12,7 +12,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import torchvision
-from sklearn.preprocessing import LabelEncoder
 from torchvision import transforms
 
 # import own functions
@@ -21,6 +20,11 @@ import sideview as sv
 
 # set  number of classess
 n_class = 33
+
+# set paths
+path_csv_train = r"S:\3D4EcoTec\train_labels.csv"
+path_csv_vali  = r"S:\3D4EcoTec\vali_labels.csv"
+path_las = r"S:\3D4EcoTec\down"
 
 #%% prepare dataset class
 
@@ -82,7 +86,7 @@ class TrainDataset_AllChannels():
 #%% test dataset class without augmentation
 
 # create dataset object
-dataset = TrainDataset_AllChannels(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec")
+dataset = TrainDataset_AllChannels(path_csv_train, path_las)
 
 # visualizing  sample
 test = dataset[1]
@@ -97,7 +101,7 @@ trafo = transforms.Compose([
     ])
 
 # create dataset object
-dataset = TrainDataset_AllChannels(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec\down", img_trans = trafo) 
+dataset = TrainDataset_AllChannels(path_csv_train, path_las, img_trans = trafo) 
 
 # visualizing  sample
 test = dataset[1]
@@ -164,10 +168,10 @@ class TrainDataset_SingleChannel():
 #%% test dataloader without augmentation
 
 # create dataset object
-dataset = TrainDataset_SingleChannel(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec\down")
+dataset = TrainDataset_SingleChannel(path_csv_train, path_las)
 
 # create data loader
-batch_size = 16
+batch_size = 2
 dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, shuffle = True)
 
 # # test output of iterator
@@ -188,10 +192,10 @@ trafo = transforms.Compose([
 ])
 
 # create dataset object
-dataset = TrainDataset_SingleChannel(r"S:\3D4EcoTec\train_labels.csv", r"S:\3D4EcoTec\down", img_trans = trafo)
+dataset = TrainDataset_SingleChannel(path_csv_train, path_las, img_trans = trafo)
 
 # create data loader
-batch_size = 16
+batch_size = 2
 dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, shuffle = True) # num_workers = 5, pin_memory = True
 
 # # test output of iterator
@@ -240,8 +244,8 @@ for epoch in range(num_epochs):
         # print progress every ten batches
         if i % 10 == 9:
             progress = (i / (len(dataset) / batch_size))
-            print('[epoch: %d] dataset: %.2f%%' %
-                  (epoch + 1, progress * 100))
+            print('[epoch: %d] dataset: %.2f%%' % (epoch + 1, progress * 100))
+        
         # load data
         inputs, height, labels = data
         inputs, labels = inputs.to("cuda"), labels.to("cuda")
