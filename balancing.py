@@ -13,18 +13,18 @@ from sklearn.preprocessing import LabelEncoder, scale
 
 #%% prepare labels
 
-# set validation dataset length
-validation_len = 400
-
 # set paths
 path_csv = r"S:\3D4EcoTec\tree_metadata_training_publish.csv"
 path_las = r"S:\3D4EcoTec\down"
 path_out = r"S:\3D4EcoTec"
 
-# read the csv file with labels to convert
-labels = pd.read_csv(path_csv)
+# set validation dataset length
+validation_len = 400
 
 #%% remove not existing files
+
+# read the csv file with labels to convert
+labels = pd.read_csv(path_csv)
 
 # encode species & data type as numbers
 le = LabelEncoder(); labels["species_id"] = le.fit_transform(labels["species"])
