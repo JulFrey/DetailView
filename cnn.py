@@ -24,7 +24,7 @@ n_class = 33
 # set paths
 path_csv_train = r"S:\3D4EcoTec\train_labels.csv"
 path_csv_vali  = r"S:\3D4EcoTec\vali_labels.csv"
-path_las = r"S:\3D4EcoTec\down"
+path_las       = r"D:\Baumartenklassifizierung\data\down"
 
 #%% prepare dataset class
 
@@ -82,31 +82,10 @@ class TrainDataset_AllChannels():
         
         # return images with labels
         return image, height, label
-
-#%% test dataset class without augmentation
-
-# create dataset object
-dataset = TrainDataset_AllChannels(path_csv_train, path_las)
-
-# visualizing  sample
-test = dataset[1]
-plt.imshow(test[0][0,:,:], interpolation = 'nearest')
-plt.show()
-
-#%% test dataset class with augmentation
-
-# setting up image augmentation
-trafo = transforms.Compose([
-    transforms.RandomCrop(200),
-    ])
-
-# create dataset object
-dataset = TrainDataset_AllChannels(path_csv_train, path_las, img_trans = trafo) 
-
-# visualizing  sample
-test = dataset[1]
-plt.imshow(test[0][0,:,:], interpolation = 'nearest')
-plt.show()
+    
+    # training weights
+    def weights(self):
+        return torch.tensor(self.trees_frame["weight"].values)
 
 #%% set up new dataset class for testing
 
@@ -164,25 +143,34 @@ class TrainDataset_SingleChannel():
         
         # return images with labels
         return image, height, label
+    
+    # training weights
+    def weights(self):
+        return torch.tensor(self.trees_frame["weight"].values)
+        
 
-#%% test dataloader without augmentation
+#%% test dataset & dataloader without augmentation
 
 # create dataset object
 dataset = TrainDataset_SingleChannel(path_csv_train, path_las)
 
+# # show image
+# plt.imshow(dataset[0][0][0,:,:], interpolation = 'nearest')
+# plt.show()
+
+# define a sampler
+train_size = 2**13
+sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement=True)
+
 # create data loader
-batch_size = 2
-dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, shuffle = True)
+batch_size = 2**4
+dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler)
 
 # # test output of iterator
 # image, height, label = next(iter(dataloader))
 # print(image.shape); print(height.shape); print(label.shape)
 
-# # show image
-# plt.imshow(image[0,0,:,:], interpolation = 'nearest')
-# plt.show()
-
-#%% test dataloader with augmentation
+#%% test dataset & dataloader with augmentation
 
 # setting up image augmentation
 trafo = transforms.Compose([
@@ -194,17 +182,21 @@ trafo = transforms.Compose([
 # create dataset object
 dataset = TrainDataset_SingleChannel(path_csv_train, path_las, img_trans = trafo)
 
+# # show image
+# plt.imshow(dataset[0][0][0,:,:], interpolation = 'nearest')
+# plt.show()
+
+# define a sampler
+train_size = 2**13
+sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement=True)
+
 # create data loader
-batch_size = 2
-dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, shuffle = True) # num_workers = 5, pin_memory = True
+batch_size = 2**4
+dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler)
 
 # # test output of iterator
 # image, height, label = next(iter(dataloader))
 # print(image.shape); print(height.shape); print(label.shape)
-
-# # show image
-# plt.imshow(image[0,0,:,:], interpolation = 'nearest')
-# plt.show()
 
 #%% training cnn
 
