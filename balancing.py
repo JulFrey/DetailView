@@ -16,8 +16,13 @@ from sklearn.preprocessing import LabelEncoder, scale
 # set validation dataset length
 validation_len = 400
 
+# set paths
+path_csv = r"S:\3D4EcoTec\tree_metadata_training_publish.csv"
+path_las = r"S:\3D4EcoTec\down"
+path_out = r"S:\3D4EcoTec"
+
 # read the csv file with labels to convert
-labels = pd.read_csv(r"S:\3D4EcoTec\tree_metadata_training_publish.csv")
+labels = pd.read_csv(path_csv)
 
 #%% remove not existing files
 
@@ -26,7 +31,7 @@ le = LabelEncoder(); labels["species_id"] = le.fit_transform(labels["species"])
 le = LabelEncoder(); labels["data_type_id"] = le.fit_transform(labels["data_type"])
 
 # check if files exist
-exists = [os.path.exists("S:/3D4EcoTec/down" + filename) for filename in labels["filename"]]
+exists = [os.path.exists(path_las + filename) for filename in labels["filename"]]
 
 # exclude rows refering to not existing files
 labels = labels[exists]
@@ -73,7 +78,7 @@ train = labels[~labels.index.isin(selected_indices)].copy()
 
 # save test data
 vali = vali[["filename", "species_id", "tree_H"]]
-vali.to_csv(r"S:\3D4EcoTec\vali_labels.csv", index = False)
+vali.to_csv(os.path.join(path_out, "vali_labels.csv"), index = False)
 
 #%% derive weights for training data
 
@@ -101,4 +106,4 @@ train["weight"] = train["weight"] / sum(train["weight"])
 
 # save new label data frame
 train = train[["filename", "species_id", "tree_H", "weight"]]
-train.to_csv(r"S:\3D4EcoTec\train_labels.csv", index = False)
+train.to_csv(os.path.join(path_out, "train_labels.csv"), index = False)
