@@ -11,6 +11,7 @@ import torch
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import torchmetrics
 import torchvision
 from torchvision import transforms
 
@@ -20,6 +21,7 @@ import sideview as sv
 
 # set  number of classess
 n_class = 33
+n_vali = 400
 
 # set paths
 path_csv_train = r"S:\3D4EcoTec\train_labels.csv"
@@ -65,7 +67,7 @@ class TrainDataset_AllChannels():
         las_name = os.path.join(
             self.root_dir,
             *self.trees_frame.iloc[idx, 0].split('/'))
-        image = sv.points_to_images(au.augment(las_name))
+        image = sv.points_to_images(au.augment(las_name)) # turn off for validation?
         
         # get side views
         image = torch.from_numpy(image)
@@ -125,7 +127,7 @@ class TrainDataset_SingleChannel():
         las_name = os.path.join(
             self.root_dir,
             *self.trees_frame.iloc[idx, 0].split('/'))
-        image = sv.points_to_images(au.augment(las_name))
+        image = sv.points_to_images(au.augment(las_name)) # turn off for validation?
         
         # get selected side & top views
         image = torch.from_numpy(image[self.channel,:,:])
@@ -252,3 +254,20 @@ for epoch in range(num_epochs):
 print('Finished training')
 
 #%% validating cnn
+
+# prepare data for validation
+vali_dataset = TrainDataset_SingleChannel(path_csv_vali, path_las)
+vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_vali)
+
+# get predictions
+inputs, height, labels = vali_dataloader
+inputs, labels = inputs.to("cuda"), labels.to("cuda")
+preds = model(inputs)
+
+# get accuracy
+accuracy = torchvision.Accuracy(task = "multiclass", num_classes = n_class)
+print('accuracy: %.3f' % accuracy(preds, labels))
+
+# get f1 score
+f1 = torchvision.F1Score(task = "multiclass", num_classes = n_class)
+print('f1 score: %.3f' % f1(preds, labels))
