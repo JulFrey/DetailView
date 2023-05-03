@@ -26,7 +26,7 @@ path_csv_train = r"S:\3D4EcoTec\train_labels.csv"
 path_csv_vali  = r"S:\3D4EcoTec\vali_labels.csv"
 path_las       = r"D:\Baumartenklassifizierung\data\down"
 
-#%% prepare dataset class
+#%% setup new dataset class
 
 # create dataset class to load the data from csv and las files
 class TrainDataset_AllChannels():
@@ -87,7 +87,7 @@ class TrainDataset_AllChannels():
     def weights(self):
         return torch.tensor(self.trees_frame["weight"].values)
 
-#%% set up new dataset class for testing
+#%% setup new dataset class for testing
 
 class TrainDataset_SingleChannel():
     """Tree species dataset."""
@@ -148,29 +148,7 @@ class TrainDataset_SingleChannel():
     def weights(self):
         return torch.tensor(self.trees_frame["weight"].values)
         
-
-#%% test dataset & dataloader without augmentation
-
-# create dataset object
-dataset = TrainDataset_SingleChannel(path_csv_train, path_las)
-
-# # show image
-# plt.imshow(dataset[0][0][0,:,:], interpolation = 'nearest')
-# plt.show()
-
-# define a sampler
-train_size = 2**13
-sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement=True)
-
-# create data loader
-batch_size = 2**4
-dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler)
-
-# # test output of iterator
-# image, height, label = next(iter(dataloader))
-# print(image.shape); print(height.shape); print(label.shape)
-
-#%% test dataset & dataloader with augmentation
+#%% setup dataset & dataloader
 
 # setting up image augmentation
 trafo = transforms.Compose([
@@ -180,7 +158,8 @@ trafo = transforms.Compose([
 ])
 
 # create dataset object
-dataset = TrainDataset_SingleChannel(path_csv_train, path_las, img_trans = trafo)
+# dataset = TrainDataset_SingleChannel(path_csv_train, path_las, img_trans = trafo) # without
+dataset = TrainDataset_SingleChannel(path_csv_train, path_las, img_trans = trafo) # with
 
 # # show image
 # plt.imshow(dataset[0][0][0,:,:], interpolation = 'nearest')
@@ -188,25 +167,37 @@ dataset = TrainDataset_SingleChannel(path_csv_train, path_las, img_trans = trafo
 
 # define a sampler
 train_size = 2**13
-sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement=True)
+sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement = True)
 
 # create data loader
 batch_size = 2**4
-dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler)
+dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler) #, num_workers = 16)
 
 # # test output of iterator
 # image, height, label = next(iter(dataloader))
 # print(image.shape); print(height.shape); print(label.shape)
 
+#%% checking value distribution
+
+# create data loader
+batch_size = 100
+dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler) #, num_workers = 16)
+
+# check value distribution
+image, height, label = next(iter(dataloader))
+plt.hist(height.numpy(), bins = 33); plt.show()
+plt.hist(label.numpy(), bins = 33); plt.show()
+
 #%% training cnn
 
 # load the model
-model = torchvision.models.densenet201() # weights = 'DenseNet201_Weights.DEFAULT')
+model = torchvision.models.densenet201()
 
-# change first & last layer
-model.features[0] = torch.nn.Conv2d(1, 64, kernel_size = (7, 7), stride = (2, 2), padding = (3, 3), bias = False) # change number of input channels
-num_ftrs = model.classifier.in_features
-model.classifier = torch.nn.Linear(num_ftrs, int(n_class + 1))
+# change first layer
+model.features[0] = torch.nn.Conv2d(1, 64, kernel_size = (7, 7), stride = (2, 2), padding = (3, 3), bias = False) # change number of input channels?
+
+# change last layer
+model.classifier = torch.nn.Linear(model.classifier.in_features, int(n_class + 1))
 
 # get the device
 device = (
@@ -220,7 +211,7 @@ device = (
 model.to(device)
 
 # define loss function and optimizer
-criterion = torch.nn.CrossEntropyLoss()
+criterion = torch.nn.CrossEntropyLoss() # laut dem simpleview paper smooth loss
 optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
 
 # loop through epochs
@@ -259,3 +250,5 @@ for epoch in range(num_epochs):
             running_loss = 0.0
 
 print('Finished training')
+
+#%% validating cnn

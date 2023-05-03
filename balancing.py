@@ -101,7 +101,7 @@ train["w_data_type"] = 1 - train["n_data_type"] / train.shape[0]
 train["w_height"]    = 1 - train["n_height"] / train.shape[0]
 
 # produce total weight
-train["weight"] = train["w_species"] * train["w_data_type"] * train["w_height"]
+train["weight"] = train["w_species"]**2 * train["w_data_type"] * train["w_height"] # square species to give more weight
 train["weight"] = train["weight"] / sum(train["weight"])
 
 # save new label data frame
