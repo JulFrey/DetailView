@@ -45,8 +45,11 @@ def points_to_images(points, res_im = 256, num_side = 4, plot = False, debug = F
     views = np.zeros((num_side + 3, res_im, res_im))
     
     # add DBH section view
+    #TODO: remove background points from section view
     if debug: print('create dbh section view')
     views[num_side + 2,:,:] = sectionview(points, res_im = res_im, plot = plot, debug = debug)
+    
+    #TODO: Subsample to max 100k points
     
     # center point cloud
     if debug: print('center point cloud')
