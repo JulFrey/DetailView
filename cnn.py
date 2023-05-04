@@ -8,7 +8,6 @@ Created on Thu Apr 20 12:26:11 2023
 # import packages
 import os
 import torch
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import torchmetrics
@@ -80,7 +79,7 @@ class TrainDataset_AllChannels():
         height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype = torch.float32)
         
         # get species
-        label = torch.tensor(self.trees_frame.iloc[idx, 1] + 1, dtype = torch.int8)
+        label = torch.tensor(self.trees_frame.iloc[idx, 1] + 1, dtype = torch.int64)
         
         # return images with labels
         return image, height, label
@@ -141,7 +140,7 @@ class TrainDataset_SingleChannel():
         height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype = torch.float32)
         
         # get species
-        label = torch.tensor(self.trees_frame.iloc[idx, 1] + 1, dtype = torch.int8)
+        label = torch.tensor(self.trees_frame.iloc[idx, 1] + 1, dtype = torch.int64)
         
         # return images with labels
         return image, height, label
@@ -172,7 +171,7 @@ train_size = 2**13
 sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement = True)
 
 # create data loader
-batch_size = 2**4
+batch_size = 2**5
 dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler) #, num_workers = 16)
 
 # # test output of iterator
@@ -196,9 +195,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampl
 model = torchvision.models.densenet201()
 
 # change first layer
-model.features[0] = torch.nn.Conv2d(1, 64, kernel_size = (7, 7), stride = (2, 2), padding = (3, 3), bias = False) # change number of input channels?
-
-# TODO: ändert sich nächster layer wenn ich die 64 ändere?
+model.features[0] = torch.nn.Conv2d(1, 64, kernel_size = (7, 7), stride = (2, 2), padding = (3, 3), bias = False)
 
 # change last layer
 model.classifier = torch.nn.Linear(model.classifier.in_features, n_class)
@@ -215,13 +212,19 @@ device = (
 model.to(device)
 
 # define loss function and optimizer
-criterion = torch.nn.CrossEntropyLoss() # laut dem simpleview paper smooth loss
+criterion = torch.nn.CrossEntropyLoss() # laut dem simpleview paper vllt smooth loss?
 optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
 
 #%% training loop
 
+# # prepare validation data for checking
+# vali_dataset = TrainDataset_SingleChannel(path_csv_vali, path_las)
+# vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_vali)
+# v_inputs, v_heights, v_labels = next(iter(vali_dataloader))
+# v_inputs, v_labels = v_inputs.to("cuda"), v_labels.to("cuda")
+
 # loop through epochs
-num_epochs = 2
+num_epochs = 1
 for epoch in range(num_epochs):
     
     #  model.train() # ich check pytorch nicht, aber sollte das nicht irgendwo auftauchen?
@@ -237,6 +240,7 @@ for epoch in range(num_epochs):
         
         # load data
         inputs, height, labels = data
+        #labels = labels.to(dtype = "float32")
         inputs, labels = inputs.to("cuda"), labels.to("cuda")
         
         # zero the parameter gradients
@@ -251,9 +255,21 @@ for epoch in range(num_epochs):
         # print statistics every 100 batches
         running_loss += loss.item()
         if i % 100 == 99:
+            
+            # loss
             print('[epoch: %d, batch: %5d] loss: %.3f' %
                   (epoch + 1, i + 1, running_loss / 100))
             running_loss = 0.0
+            
+            # # validation loss
+            # running_v_loss = 0
+            # model.train(False)
+            # v_outputs = model(inputs)
+            # v_loss = criterion(v_outputs, v_labels)
+            # running_v_loss += v_loss.item()
+            # print('[epoch: %d, batch: %5d] validation loss: %.3f' %
+            #       (epoch + 1, i + 1, running_v_loss / len(vali_dataloader)))
+            # model.train(True)
 
 print('Finished training')
 
@@ -264,14 +280,14 @@ vali_dataset = TrainDataset_SingleChannel(path_csv_vali, path_las)
 vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_vali)
 
 # get predictions
-inputs, heights, labels = next(iter(vali_dataloader))
-inputs, labels = inputs.to("cuda"), labels.to("cuda")
-preds = model(inputs)
+v_inputs, v_heights, v_labels = next(iter(vali_dataloader))
+v_inputs, v_labels = v_inputs.to("cuda"), v_labels.to("cuda")
+v_preds = model(v_inputs)
 
 # get accuracy
 accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = n_class).to("cuda")
-print('accuracy: %.3f' % accuracy(preds, labels))
+print('accuracy: %.3f' % accuracy(v_preds, v_labels))
 
 # get f1 score
 f1 = torchmetrics.F1Score(task = "multiclass", num_classes = n_class).to("cuda")
-print('f1 score: %.3f' % f1(preds, labels))
+print('f1 score: %.3f' % f1(v_preds, v_labels))
