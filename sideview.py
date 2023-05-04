@@ -45,11 +45,11 @@ def points_to_images(points, res_im = 256, num_side = 4, plot = False, debug = F
     views = np.zeros((num_side + 3, res_im, res_im), dtype = "float32")
     
     # add DBH section view
-    #TODO: remove background points from section view
+    # TODO: remove background points from section view
     if debug: print('create dbh section view')
     views[num_side + 2,:,:] = sectionview(points, res_im = res_im, plot = plot, debug = debug)
     
-    #TODO: Subsample to max 100k points
+    # TODO: Subsample to max 100k points
     
     # center point cloud
     if debug: print('center point cloud')
@@ -161,7 +161,7 @@ def topview(points, res_im = 256, inverse = False, plot = False):
             
             # update the corresponding pixel in the depth image with the z coordinate
             if point[2] > top_image[x_pos % res_im, y_pos % res_im]: # wraped world to avoid out of range indexing
-                top_image[x_pos % res_im, y_pos % res_im] = point[2]      
+                top_image[x_pos % res_im, y_pos % res_im] = point[2]
         
     # replace dummy values with value
     top_image[top_image == -999] = 0
@@ -286,7 +286,7 @@ def sectionview(points, res_im = 256, plot = False, debug = False):
         section = section / np.max(abs(section))
         
         # create sideview
-        section_image = sideview(section, res_im = 256, plot = False)
+        section_image = sideview(section, res_im = res_im, plot = False)
         
     else:
         # create empty array
