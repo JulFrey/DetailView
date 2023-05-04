@@ -285,9 +285,9 @@ v_inputs, v_labels = v_inputs.to(device), v_labels.to(device)
 v_preds = model(v_inputs)
 
 # get accuracy
-accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = n_class).to("cuda")
+accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = int(n_class + 1)).to("cuda")
 print('accuracy: %.3f' % accuracy(v_preds, v_labels))
 
 # get f1 score
-f1 = torchmetrics.F1Score(task = "multiclass", num_classes = n_class).to("cuda")
+f1 = torchmetrics.F1Score(task = "multiclass", num_classes = int(n_class + 1)).to("cuda")
 print('f1 score: %.3f' % f1(v_preds, v_labels))
