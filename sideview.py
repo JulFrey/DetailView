@@ -42,7 +42,7 @@ def points_to_images(points, res_im = 256, num_side = 4, plot = False, debug = F
     # las = rl.read_las(path_las)
     
     # prepare view array
-    views = np.zeros((num_side + 3, res_im, res_im))
+    views = np.zeros((num_side + 3, res_im, res_im), dtype = "float32")
     
     # add DBH section view
     #TODO: remove background points from section view

@@ -77,10 +77,10 @@ class TrainDataset_AllChannels():
             image = self.img_trans(image)
         
         # get height
-        height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype = torch.float)
+        height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype = torch.float32)
         
         # get species
-        label = torch.tensor(self.trees_frame.iloc[idx, 1] + 1, dtype = torch.int64)
+        label = torch.tensor(self.trees_frame.iloc[idx, 1] + 1, dtype = torch.int8)
         
         # return images with labels
         return image, height, label
@@ -138,10 +138,10 @@ class TrainDataset_SingleChannel():
             image = self.img_trans(image)
         
         # get height
-        height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype = torch.float)
+        height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype = torch.float32)
         
         # get species
-        label = torch.tensor(self.trees_frame.iloc[idx, 1] + 1, dtype = torch.int64)
+        label = torch.tensor(self.trees_frame.iloc[idx, 1] + 1, dtype = torch.int8)
         
         # return images with labels
         return image, height, label
@@ -181,16 +181,16 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampl
 
 #%% checking value distribution
 
-# create data loader
-batch_size = 100
-dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler) #, num_workers = 16)
+# # create data loader
+# batch_size_test = 100
+# dataloader_test = torch.utils.data.DataLoader(dataset, batch_size = batch_size_test, sampler = sampler) #, num_workers = 16)
 
-# check value distribution
-image, height, label = next(iter(dataloader))
-plt.hist(height.numpy(), bins = 33); plt.show()
-plt.hist(label.numpy(), bins = 33); plt.show()
+# # check value distribution
+# image, height, label = next(iter(dataloader_test))
+# plt.hist(height.numpy(), bins = 33); plt.show()
+# plt.hist(label.numpy(), bins = 33); plt.show()
 
-#%% training cnn
+#%% setup model
 
 # load the model
 model = torchvision.models.densenet201()
@@ -198,8 +198,10 @@ model = torchvision.models.densenet201()
 # change first layer
 model.features[0] = torch.nn.Conv2d(1, 64, kernel_size = (7, 7), stride = (2, 2), padding = (3, 3), bias = False) # change number of input channels?
 
+# TODO: ändert sich nächster layer wenn ich die 64 ändere?
+
 # change last layer
-model.classifier = torch.nn.Linear(model.classifier.in_features, int(n_class + 1))
+model.classifier = torch.nn.Linear(model.classifier.in_features, n_class)
 
 # get the device
 device = (
@@ -215,6 +217,8 @@ model.to(device)
 # define loss function and optimizer
 criterion = torch.nn.CrossEntropyLoss() # laut dem simpleview paper smooth loss
 optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
+
+#%% training loop
 
 # loop through epochs
 num_epochs = 2
@@ -260,14 +264,14 @@ vali_dataset = TrainDataset_SingleChannel(path_csv_vali, path_las)
 vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_vali)
 
 # get predictions
-inputs, height, labels = vali_dataloader
+inputs, heights, labels = next(iter(vali_dataloader))
 inputs, labels = inputs.to("cuda"), labels.to("cuda")
 preds = model(inputs)
 
 # get accuracy
-accuracy = torchvision.Accuracy(task = "multiclass", num_classes = n_class)
+accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = n_class).to("cuda")
 print('accuracy: %.3f' % accuracy(preds, labels))
 
 # get f1 score
-f1 = torchvision.F1Score(task = "multiclass", num_classes = n_class)
+f1 = torchmetrics.F1Score(task = "multiclass", num_classes = n_class).to("cuda")
 print('f1 score: %.3f' % f1(preds, labels))
