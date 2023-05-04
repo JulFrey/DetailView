@@ -171,8 +171,8 @@ train_size = 2**13
 sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement = True)
 
 # create data loader
-batch_size = 2**5
-dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler) #, num_workers = 16)
+batch_size = 2**4
+dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler) # pin_memory = True
 
 # # test output of iterator
 # image, height, label = next(iter(dataloader))
@@ -198,7 +198,7 @@ model = torchvision.models.densenet201()
 model.features[0] = torch.nn.Conv2d(1, 64, kernel_size = (7, 7), stride = (2, 2), padding = (3, 3), bias = False)
 
 # change last layer
-model.classifier = torch.nn.Linear(model.classifier.in_features, n_class)
+model.classifier = torch.nn.Linear(model.classifier.in_features, int(n_class + 1)) # TODO
 
 # get the device
 device = (
@@ -241,7 +241,7 @@ for epoch in range(num_epochs):
         # load data
         inputs, height, labels = data
         #labels = labels.to(dtype = "float32")
-        inputs, labels = inputs.to("cuda"), labels.to("cuda")
+        inputs, labels = inputs.to(device), labels.to(device)
         
         # zero the parameter gradients
         optimizer.zero_grad()
@@ -277,11 +277,11 @@ print('Finished training')
 
 # prepare data for validation
 vali_dataset = TrainDataset_SingleChannel(path_csv_vali, path_las)
-vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_vali)
+vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = 5)
 
 # get predictions
 v_inputs, v_heights, v_labels = next(iter(vali_dataloader))
-v_inputs, v_labels = v_inputs.to("cuda"), v_labels.to("cuda")
+v_inputs, v_labels = v_inputs.to(device), v_labels.to(device)
 v_preds = model(v_inputs)
 
 # get accuracy
