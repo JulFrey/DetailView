@@ -168,7 +168,7 @@ dataset = TrainDataset_SingleChannel(path_csv_train, path_las, img_trans = trafo
 # plt.show()
 
 # define a sampler
-train_size = 2**9 # 2**13 # TODO: change back, this was for profiling
+train_size = 2**13
 sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement = True)
 
 # create data loader

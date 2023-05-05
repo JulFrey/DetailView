@@ -31,4 +31,4 @@ def read_las(path_las):
     
     # return numpy array
     data = pipeline.arrays[0]
-    return np.stack((data['X'], data['Y'], data['Z']), axis = 1)
+    return np.column_stack((data['X'], data['Y'], data['Z']))
