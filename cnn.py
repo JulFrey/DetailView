@@ -156,8 +156,7 @@ class TrainDataset_SingleChannel():
 trafo = transforms.Compose([
     transforms.ToPILImage(),
     transforms.Resize(64), # for testing the model
-    transforms.ToTensor()
-])
+    transforms.ToTensor()])
 
 # create dataset object
 # dataset = TrainDataset_SingleChannel(path_csv_train, path_las, img_trans = trafo) # without
@@ -173,7 +172,7 @@ sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), trai
 
 # create data loader
 batch_size = 2**4
-dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler) # pin_memory = True, num_workers = 4
+dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True) #, num_workers = 32)
 
 # # test output of iterator
 # image, height, label = next(iter(dataloader))
@@ -183,7 +182,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampl
 
 # # create data loader
 # batch_size_test = 100
-# dataloader_test = torch.utils.data.DataLoader(dataset, batch_size = batch_size_test, sampler = sampler) # pin_memory = True, num_workers = 4
+# dataloader_test = torch.utils.data.DataLoader(dataset, batch_size = batch_size_test, sampler = sampler, pin_memory = True) #, num_workers = 4
 
 # # check value distribution
 # image, height, label = next(iter(dataloader_test))
@@ -218,14 +217,17 @@ optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
 
 #%% training loop
 
-# # prepare validation data for checking
-# vali_dataset = TrainDataset_SingleChannel(path_csv_vali, path_las)
-# vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = 2**4, shuffle = True) # pin_memory = True, num_workers = 4
+# prepare validation data for checking
+vali_dataset = TrainDataset_SingleChannel(path_csv_vali, path_las)
+vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = 2**4, shuffle = True, pin_memory = True) #, num_workers = 32)
 
-# loop through epochs
+# prepare training
 num_epochs = 1
 best_v_loss = 1000
+last_improvement = 0
 timestamp = datetime.datetime.now().strftime('%Y%m%H%M')
+
+# loop through epochs
 for epoch in range(num_epochs):
     
     #  model.train() # ich check pytorch nicht, aber sollte das nicht irgendwo auftauchen?
@@ -265,45 +267,65 @@ for epoch in range(num_epochs):
         del inputs, height, labels
         torch.cuda.empty_cache()
             
-    # # validation loss
-    # running_v_loss = 0
-    # model.train(False)
-    # for j, v_data in enumerate(vali_dataloader, 0):
-    #     v_inputs, v_heights, v_labels = next(iter(vali_dataloader))
-    #     v_inputs, v_labels = v_inputs.to("cuda"), v_labels.to("cuda")
-    #     v_outputs = model(v_inputs)
-    #     v_loss = criterion(v_outputs, v_labels)
-    #     running_v_loss += v_loss.item()
-    #     del v_inputs, v_heights, v_labels
-    #     torch.cuda.empty_cache()
-    # avg_v_loss = running_v_loss / len(vali_dataloader)
-    # model.train(True)
-    # print('[epoch: %d] validation loss: %.3f' %
-    #       (epoch + 1, avg_v_loss))
+    # validation loss
+    running_v_loss = 0
+    model.eval()
+    for j, v_data in enumerate(vali_dataloader, 0):
+        v_inputs, v_heights, v_labels = next(iter(vali_dataloader))
+        v_inputs, v_labels = v_inputs.to("cuda"), v_labels.to("cuda")
+        v_outputs = model(v_inputs)
+        v_loss = criterion(v_outputs, v_labels)
+        running_v_loss += v_loss.item()
+        del v_inputs, v_heights, v_labels
+        torch.cuda.empty_cache()
+    avg_v_loss = running_v_loss / len(vali_dataloader)
+    model.train()
+    print('[epoch: %d] validation loss: %.3f' %
+          (epoch + 1, avg_v_loss))
     
-    # # save best model
-    # if avg_v_loss < best_v_loss:
-    #     best_v_loss = avg_v_loss
-    #     model_path = "model_{}_{}".format(timestamp, epoch + 1)
-    #     torch.save(model.state_dict(), model_path)
+    # save best model
+    if avg_v_loss < best_v_loss:
+        best_v_loss = avg_v_loss
+        model_path = "model_{}_{}".format(timestamp, epoch + 1)
+        torch.save(model.state_dict(), model_path)
+        last_improvement = 0
+    else:
+        last_improvement += 1
+    
+    # check how long last improvement was ago
+    if last_improvement > 5:
+        break
 
 print('Finished training')
 
 #%% validating cnn
 
-# # prepare data for validation
-# vali_dataset = TrainDataset_SingleChannel(path_csv_vali, path_las)
-# vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_class) # pin_memory = True, num_workers = 4
+# TODO: GPU memory is full after training
 
-# # get predictions
-# v_inputs, v_heights, v_labels = next(iter(vali_dataloader))
-# v_inputs, v_labels = v_inputs.to(device), v_labels.to(device)
-# v_preds = model(v_inputs)
+# turn on evaluation mode
+model.eval()
 
-# # get accuracy
-# accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = int(n_class)).to("cuda")
-# print('accuracy: %.3f' % accuracy(v_preds, v_labels))
+# prepare data for validation
+vali_dataset = TrainDataset_SingleChannel(path_csv_vali, path_las)
+vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_class, pin_memory = True) #, num_workers = 32)
 
-# # get f1 score
-# f1 = torchmetrics.F1Score(task = "multiclass", num_classes = int(n_class)).to("cuda")
-# print('f1 score: %.3f' % f1(v_preds, v_labels))
+# get predictions
+v_inputs, v_heights, v_labels = next(iter(vali_dataloader))
+v_inputs, v_labels = v_inputs.to(device), v_labels.to(device)
+v_preds = model(v_inputs)
+
+# free memory
+del v_inputs
+torch.cuda.empty_cache()
+
+# get accuracy
+accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = int(n_class)).to("cuda")
+print('accuracy: %.3f' % accuracy(v_preds, v_labels))
+
+# get f1 score
+f1 = torchmetrics.F1Score(task = "multiclass", num_classes = int(n_class)).to("cuda")
+print('f1 score: %.3f' % f1(v_preds, v_labels))
+
+# free memory
+del v_preds, v_labels
+torch.cuda.empty_cache()
