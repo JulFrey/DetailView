@@ -67,7 +67,7 @@ class TrainDataset_AllChannels():
         las_name = os.path.join(
             self.root_dir,
             *self.trees_frame.iloc[idx, 0].split('/'))
-        image = sv.points_to_images(au.augment(las_name)) # turn off for validation?
+        image = sv.points_to_images(au.augment(las_name), res_im = 64) # turn off for validation?
         
         # get side views
         image = torch.from_numpy(image)
@@ -75,6 +75,9 @@ class TrainDataset_AllChannels():
         # augment images
         if self.img_trans:
             image = self.img_trans(image)
+        
+        # add dimension
+        image = image.unsqueeze(1)
         
         # get height
         height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype = torch.float32)
@@ -91,92 +94,92 @@ class TrainDataset_AllChannels():
 
 #%% setup new dataset class for testing
 
-class TrainDataset_SingleChannel():
-    """Tree species dataset."""
+# class TrainDataset_SingleChannel():
+#     """Tree species dataset."""
 
-    # initialization
-    def __init__(self, csv_file, root_dir, img_trans = None, channel = 0):
+#     # initialization
+#     def __init__(self, csv_file, root_dir, img_trans = None, channel = 0):
         
-        """
-        Arguments:
-            csv_file (string): Path to the csv file with annotations with the collumns
-                0: filenme, 1: label_id, 2: tree height.
-            root_dir (string): Directory with all the las files.
-            img_trans (callable, optional): Optional transform to be applied
-                on a sample.
-        """
+#         """
+#         Arguments:
+#             csv_file (string): Path to the csv file with annotations with the collumns
+#                 0: filenme, 1: label_id, 2: tree height.
+#             root_dir (string): Directory with all the las files.
+#             img_trans (callable, optional): Optional transform to be applied
+#                 on a sample.
+#         """
         
-        # set attributes
-        self.trees_frame = pd.read_csv(csv_file)
-        self.root_dir    = root_dir
-        self.img_trans   = img_trans
-        self.channel     = channel
+#         # set attributes
+#         self.trees_frame = pd.read_csv(csv_file)
+#         self.root_dir    = root_dir
+#         self.img_trans   = img_trans
+#         self.channel     = channel
     
-    # length
-    def __len__(self):
-        return len(self.trees_frame)
+#     # length
+#     def __len__(self):
+#         return len(self.trees_frame)
     
-    # indexing
-    def __getitem__(self, idx):
+#     # indexing
+#     def __getitem__(self, idx):
         
-        # convert indices to list
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
+#         # convert indices to list
+#         if torch.is_tensor(idx):
+#             idx = idx.tolist()
         
-        # get full las path
-        las_name = os.path.join(
-            self.root_dir,
-            *self.trees_frame.iloc[idx, 0].split('/'))
-        image = sv.points_to_images(au.augment(las_name)) # turn off for validation?
+#         # get full las path
+#         las_name = os.path.join(
+#             self.root_dir,
+#             *self.trees_frame.iloc[idx, 0].split('/'))
+#         image = sv.points_to_images(au.augment(las_name)) # turn off for validation?
         
-        # get selected side & top views
-        image = torch.from_numpy(image[self.channel,:,:])
-        image = torch.unsqueeze(image, dim = 0)
+#         # get selected side & top views
+#         image = torch.from_numpy(image[self.channel,:,:])
+#         image = torch.unsqueeze(image, dim = 0)
         
-        # augment images
-        if self.img_trans:
-            image = self.img_trans(image)
+#         # augment images
+#         if self.img_trans:
+#             image = self.img_trans(image)
         
-        # get height
-        height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype = torch.float32)
+#         # get height
+#         height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype = torch.float32)
         
-        # get species
-        label = torch.tensor(self.trees_frame.iloc[idx, 1], dtype = torch.int64)
+#         # get species
+#         label = torch.tensor(self.trees_frame.iloc[idx, 1], dtype = torch.int64)
         
-        # return images with labels
-        return image, height, label
+#         # return images with labels
+#         return image, height, label
     
-    # training weights
-    def weights(self):
-        return torch.tensor(self.trees_frame["weight"].values)
+#     # training weights
+#     def weights(self):
+#         return torch.tensor(self.trees_frame["weight"].values)
         
 #%% setup dataset & dataloader
 
-# setting up image augmentation
-trafo = transforms.Compose([
-    transforms.ToPILImage(),
-    transforms.Resize(64), # for testing the model
-    transforms.ToTensor()])
+# # setting up image augmentation
+# trafo = transforms.Compose([
+#     transforms.ToPILImage(),
+#     transforms.Resize(64), # for testing the model
+#     transforms.ToTensor()])
 
-# create dataset object
-# dataset = TrainDataset_SingleChannel(path_csv_train, path_las, img_trans = trafo) # without
-dataset = TrainDataset_SingleChannel(path_csv_train, path_las, img_trans = trafo) # with
+# # create dataset object
+# # dataset = TrainDataset_SingleChannel(path_csv_train, path_las, img_trans = trafo) # without
+# dataset = TrainDataset_SingleChannel(path_csv_train, path_las, img_trans = trafo) # with
 
-# # show image
-# plt.imshow(dataset[0][0][0,:,:], interpolation = 'nearest')
-# plt.show()
+# # # show image
+# # plt.imshow(dataset[0][0][0,:,:], interpolation = 'nearest')
+# # plt.show()
 
-# define a sampler
-train_size = 2**13
-sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement = True)
+# # define a sampler
+# train_size = 2**13
+# sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement = True)
 
-# create data loader
-batch_size = 2**4
-dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True) #, num_workers = 32)
+# # create data loader
+# batch_size = 2**4
+# dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True) #, num_workers = 32)
 
-# # test output of iterator
-# image, height, label = next(iter(dataloader))
-# print(image.shape); print(height.shape); print(label.shape)
+# # # test output of iterator
+# # image, height, label = next(iter(dataloader))
+# # print(image.shape); print(height.shape); print(label.shape)
 
 #%% checking value distribution
 
@@ -191,14 +194,77 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampl
 
 #%% setup model
 
+# # load the model
+# model = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
+
+# # change first layer
+# model.features[0].in_channels = 1
+# model.features[0].weight = torch.nn.Parameter(model.features[0].weight.sum(dim = 1, keepdim = True))
+
+# # change last layer
+# model.classifier.out_features = int(n_class)
+
+# # get the device
+# device = (
+#     "cuda"
+#     if torch.cuda.is_available()
+#     else "mps"
+#     if torch.backends.mps.is_available()
+#     else "cpu")
+
+# # give to devise
+# model.to(device)
+
+# # define loss function and optimizer
+# criterion = torch.nn.CrossEntropyLoss() # laut dem simpleview paper vllt smooth loss?
+# optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
+
+#%% simple view
+
+# prepare data
+dataset = TrainDataset_AllChannels(path_csv_train, path_las)
+
+# define a sampler
+train_size = 2**13
+sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement = True)
+
+# create data loader
+batch_size = 2**4
+dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True) #, num_workers = 32)
+
+# https://github.com/isaaccorley/simpleview-pytorch/blob/main/simpleview_pytorch/simpleview.py
+class SimpleView(torch.nn.Module):
+
+    def __init__(self, num_views: int, num_classes: int):
+        super().__init__()
+        
+        # load backbone
+        backbone = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
+        
+        # change first layer to greyscale
+        backbone.features[0].in_channels = 1
+        backbone.features[0].weight = torch.nn.Parameter(backbone.features[0].weight.sum(dim = 1, keepdim = True))
+        
+        # remove effect of classifier
+        z_dim = backbone.classifier.in_features
+        backbone.classifier = torch.nn.Identity()
+        
+        # add new classifier
+        self.backbone = backbone
+        self.classifier = torch.nn.Linear(
+            in_features = z_dim * num_views,
+            out_features = num_classes)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        b, v, c, h, w = x.shape
+        x = x.reshape(b * v, c, h, w) # batch * views
+        z = self.backbone(x)
+        z = z.reshape(b, v, -1)
+        z = z.reshape(b, -1)
+        return self.classifier(z)
+
 # load the model
-model = torchvision.models.densenet201()
-
-# change first layer
-model.features[0] = torch.nn.Conv2d(1, 64, kernel_size = (7, 7), stride = (2, 2), padding = (3, 3), bias = False)
-
-# change last layer
-model.classifier = torch.nn.Linear(model.classifier.in_features, int(n_class)) # TODO
+model = SimpleView(num_views = 7, num_classes = n_class)
 
 # get the device
 device = (
@@ -208,8 +274,13 @@ device = (
     if torch.backends.mps.is_available()
     else "cpu")
 
-# give to devise
+# give to device
 model.to(device)
+
+# # get test prediction
+# inputs, heights, labels = next(iter(dataloader))
+# inputs, labels = inputs.to(device), labels.to(device)
+# preds = model(inputs)
 
 # define loss function and optimizer
 criterion = torch.nn.CrossEntropyLoss() # laut dem simpleview paper vllt smooth loss?
@@ -218,19 +289,17 @@ optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
 #%% training loop
 
 # prepare validation data for checking
-vali_dataset = TrainDataset_SingleChannel(path_csv_vali, path_las)
+vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las)
 vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = 2**4, shuffle = True, pin_memory = True) #, num_workers = 32)
 
 # prepare training
-num_epochs = 1
+num_epochs = 100
 best_v_loss = 1000
 last_improvement = 0
 timestamp = datetime.datetime.now().strftime('%Y%m%H%M')
 
 # loop through epochs
 for epoch in range(num_epochs):
-    
-    #  model.train() # ich check pytorch nicht, aber sollte das nicht irgendwo auftauchen?
     running_loss = 0.0
     
     # loop through whole dataset?
@@ -296,6 +365,7 @@ for epoch in range(num_epochs):
     if last_improvement > 5:
         break
 
+torch.cuda.empty_cache()
 print('Finished training')
 
 #%% validating cnn
@@ -306,7 +376,7 @@ print('Finished training')
 model.eval()
 
 # prepare data for validation
-vali_dataset = TrainDataset_SingleChannel(path_csv_vali, path_las)
+vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las)
 vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_class, pin_memory = True) #, num_workers = 32)
 
 # get predictions
