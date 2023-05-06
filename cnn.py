@@ -219,18 +219,8 @@ class TrainDataset_AllChannels():
 # criterion = torch.nn.CrossEntropyLoss() # laut dem simpleview paper vllt smooth loss?
 # optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
 
-#%% simple view
+#%% setup simple view
 
-# prepare data
-dataset = TrainDataset_AllChannels(path_csv_train, path_las)
-
-# define a sampler
-train_size = 2**13
-sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement = True)
-
-# create data loader
-batch_size = 2**4
-dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True) #, num_workers = 32)
 
 # https://github.com/isaaccorley/simpleview-pytorch/blob/main/simpleview_pytorch/simpleview.py
 class SimpleView(torch.nn.Module):
@@ -262,6 +252,20 @@ class SimpleView(torch.nn.Module):
         z = z.reshape(b, v, -1)
         z = z.reshape(b, -1)
         return self.classifier(z)
+
+#%% prepare simple view
+
+# prepare data
+dataset = TrainDataset_AllChannels(path_csv_train, path_las)
+
+# define a sampler
+train_size = 2**13
+sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement = True)
+
+# create data loader
+batch_size = 2**4
+dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True) #, num_workers = 32)
+
 
 # load the model
 model = SimpleView(num_views = 7, num_classes = n_class)
@@ -307,7 +311,7 @@ for epoch in range(num_epochs):
         
         # print progress every ten batches
         if i % 10 == 9:
-            progress = (i / (len(dataset) / batch_size))
+            progress = (i / len(dataloader))
             print('[epoch: %d] dataset: %.2f%%' % (epoch + 1, progress * 100))
         
         # load data
@@ -366,36 +370,52 @@ for epoch in range(num_epochs):
         break
 
 torch.cuda.empty_cache()
-print('Finished training')
+print('\nFinished training\n')
 
 #%% validating cnn
 
-# TODO: GPU memory is full after training
+# load best model
+model = SimpleView(num_views = 7, num_classes = n_class)
+model.load_state_dict(torch.load("model_2023051718_16"))
+
+# get the device
+device = (
+    "cuda"
+    if torch.cuda.is_available()
+    else "mps"
+    if torch.backends.mps.is_available()
+    else "cpu")
+
+# give to device
+model.to(device)
 
 # turn on evaluation mode
 model.eval()
 
 # prepare data for validation
 vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las)
-vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_class, pin_memory = True) #, num_workers = 32)
+vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = int(n_vali/10), pin_memory = True) #, num_workers = 32)
 
-# get predictions
-v_inputs, v_heights, v_labels = next(iter(vali_dataloader))
-v_inputs, v_labels = v_inputs.to(device), v_labels.to(device)
-v_preds = model(v_inputs)
+# create metrics
+accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = int(n_class)).to(device)
+f1 = torchmetrics.F1Score(task = "multiclass", num_classes = int(n_class)).to(device)
 
-# free memory
-del v_inputs
-torch.cuda.empty_cache()
+# iterate over validation dataloader in batches
+for data in vali_dataloader:
+    v_inputs, v_heights, v_labels = data
+    v_inputs, v_labels = v_inputs.to(device), v_labels.to(device)
 
-# get accuracy
-accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = int(n_class)).to("cuda")
-print('accuracy: %.3f' % accuracy(v_preds, v_labels))
+    # get predictions
+    v_preds = model(v_inputs)
 
-# get f1 score
-f1 = torchmetrics.F1Score(task = "multiclass", num_classes = int(n_class)).to("cuda")
-print('f1 score: %.3f' % f1(v_preds, v_labels))
+    # calculate metrics for the batch
+    accuracy.update(v_preds, v_labels)
+    f1.update(v_preds, v_labels)
 
-# free memory
-del v_preds, v_labels
-torch.cuda.empty_cache()
+# get the final metrics
+final_accuracy = accuracy.compute()
+final_f1 = f1.compute()
+
+# print final metrics
+print('accuracy: %.3f' % final_accuracy)
+print('f1: %.3f' % final_f1)
