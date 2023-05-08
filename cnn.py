@@ -153,43 +153,43 @@ class TrainDataset_AllChannels():
 
 #%% setup simple view
 
-# https://github.com/isaaccorley/simpleview-pytorch/blob/main/simpleview_pytorch/simpleview.py
-class SimpleView(torch.nn.Module):
+# # https://github.com/isaaccorley/simpleview-pytorch/blob/main/simpleview_pytorch/simpleview.py
+# class SimpleView(torch.nn.Module):
 
-    def __init__(self, num_views: int, num_classes: int):
-        super().__init__()
+#     def __init__(self, num_views: int, num_classes: int):
+#         super().__init__()
         
-        # load backbone
-        backbone = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
+#         # load backbone
+#         backbone = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
         
-        # change first layer to greyscale
-        backbone.features[0].in_channels = 1
-        backbone.features[0].weight = torch.nn.Parameter(backbone.features[0].weight.sum(dim = 1, keepdim = True))
+#         # change first layer to greyscale
+#         backbone.features[0].in_channels = 1
+#         backbone.features[0].weight = torch.nn.Parameter(backbone.features[0].weight.sum(dim = 1, keepdim = True))
         
-        # remove effect of classifier
-        z_dim = backbone.classifier.in_features
-        backbone.classifier = torch.nn.Identity()
+#         # remove effect of classifier
+#         z_dim = backbone.classifier.in_features
+#         backbone.classifier = torch.nn.Identity()
         
-        # add new classifier
-        self.backbone = backbone
-        self.classifier = torch.nn.Linear(
-            in_features = z_dim * num_views,
-            out_features = num_classes)
+#         # add new classifier
+#         self.backbone = backbone
+#         self.classifier = torch.nn.Linear(
+#             in_features = z_dim * num_views,
+#             out_features = num_classes)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        b, v, c, h, w = x.shape
-        x = x.reshape(b * v, c, h, w) # batch * views
-        z = self.backbone(x)
-        z = z.reshape(b, v, -1)
-        z = z.reshape(b, -1)
-        return self.classifier(z)
+#     def forward(self, x: torch.Tensor) -> torch.Tensor:
+#         b, v, c, h, w = x.shape
+#         x = x.reshape(b * v, c, h, w) # batch * views
+#         z = self.backbone(x)
+#         z = z.reshape(b, v, -1)
+#         z = z.reshape(b, -1)
+#         return self.classifier(z)
 
 #%% prepare simple view
 
 # setting up image augmentation
 img_trans = transforms.Compose([
-    transforms.RandomHorizontalFlip(0.25),
-    transforms.RandomRotation(10),
+    transforms.RandomHorizontalFlip(0.5),
+    # transforms.RandomRotation(10),
     transforms.RandomAffine(
         degrees = 10, translate = (0.25, 0.25), scale = (0.75, 1.25))])
 
@@ -206,7 +206,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampl
 
 # load the model
 # model = SimpleView(num_views = 7, num_classes = n_class)
-model = net.ParallelDenseNet(n_class)
+model = net.ParallelDenseNet(n_class, num_views = 7)
 
 # get the device
 device = (

@@ -10,24 +10,37 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class ParallelDenseNet(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, num_views):
         super(ParallelDenseNet, self).__init__()
         self.num_classes = num_classes
+        self.num_views = num_views
         
-        # Define a single DenseNet
+        # define a single DenseNet
         self.shared_densenet = torch.hub.load('pytorch/vision', 'densenet201', weights = 'DenseNet201_Weights.DEFAULT')
         self.shared_densenet.features[0].in_channels = 1
         self.shared_densenet.features[0].weight = nn.Parameter(self.shared_densenet.features[0].weight.sum(dim = 1, keepdim = True))
-        self.shared_densenet = nn.Sequential(*list(self.shared_densenet.features.children()))
         
-        # Define fully connected layers
-        self.fc1 = nn.Linear(430080, 1024)
-        self.fc2 = nn.Linear(1024, self.num_classes)
+        # remove effect of classifier
+        z_dim = self.shared_densenet.classifier.in_features
+        self.shared_densenet.classifier = nn.Identity()
+        
+        # define flattener
         self.flatten = nn.Flatten()
+        
+        # define float pathway
+        self.float_pathway = nn.Sequential(
+            nn.Linear(1, 64),
+            nn.ReLU(),
+            nn.Linear(64, z_dim))
+        
+        # create new classifier
+        self.classifier = nn.Linear(
+                   in_features = z_dim * (num_views + 1),
+                   out_features = num_classes)
 
     def forward(self, inputs, heights):
         
-        # Pass each input tensor through the shared DenseNet
+        # pass each input tensor through the shared DenseNet
         img1 = self.shared_densenet(inputs[:,0,:,:,:])
         img2 = self.shared_densenet(inputs[:,1,:,:,:])
         img3 = self.shared_densenet(inputs[:,2,:,:,:])
@@ -37,19 +50,17 @@ class ParallelDenseNet(nn.Module):
         img7 = self.shared_densenet(inputs[:,6,:,:,:])
         del inputs
         
-        # Concatenate the output tensors from all branches
+        # concatenate the output tensors from all branches
         img = torch.cat((img1, img2, img3, img4, img5, img6, img7), dim = 1)
         img = self.flatten(img)
+        
+        # using height float
+        heights = self.float_pathway(heights.view(-1, 1))
 
-        # Broadcast the float input tensor to match the size of x
-        heights = heights.view(-1, 1).expand(-1, img.shape[1])
-
-        # Concatenate the float input to the flattened tensor
+        # cncatenate the float input to the flattened tensor
         img = torch.cat((img, heights), dim = 1)
 
-        # Pass the concatenated tensor through fully connected layers
-        img = self.fc1(img)
-        img = F.relu(img)
-        img = self.fc2(img)
+        # pass the concatenated tensor through fully connected layers
+        label = self.classifier(img)
 
-        return img
+        return label
