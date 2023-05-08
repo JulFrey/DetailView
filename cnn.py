@@ -9,6 +9,7 @@ Created on Thu Apr 20 12:26:11 2023
 import os
 import torch
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import torchmetrics
 import torchvision
@@ -18,14 +19,15 @@ import datetime
 # import own functions
 import augmentation as au
 import sideview as sv
+import read_las as rl
 
 # set  number of classess
 n_class = 33
 n_vali = 400
 
 # set paths
-path_csv_train = r"S:\3D4EcoTec\train_labels.csv"
-path_csv_vali  = r"S:\3D4EcoTec\vali_labels.csv"
+path_csv_train = r"C:\Baumartenklassifizierung\train_labels.csv" #r"S:\3D4EcoTec\train_labels.csv"
+path_csv_vali  = r"C:\Baumartenklassifizierung\vali_labels.csv" #r"S:\3D4EcoTec\vali_labels.csv"
 path_las       = r"C:\Baumartenklassifizierung\data\down"
 
 #%% setup new dataset class
@@ -36,7 +38,7 @@ class TrainDataset_AllChannels():
     """Tree species dataset."""
     
     # initialization
-    def __init__(self, csv_file, root_dir, img_trans = None):
+    def __init__(self, csv_file, root_dir, img_trans = None, pc_rotate = True):
         
         """
         Arguments:
@@ -51,6 +53,7 @@ class TrainDataset_AllChannels():
         self.trees_frame = pd.read_csv(csv_file)
         self.root_dir    = root_dir
         self.img_trans   = img_trans
+        self.pc_rotate   = pc_rotate
     
     # length
     def __len__(self):
@@ -67,12 +70,23 @@ class TrainDataset_AllChannels():
         las_name = os.path.join(
             self.root_dir,
             *self.trees_frame.iloc[idx, 0].split('/'))
-        image = sv.points_to_images(au.augment(las_name), res_im = 64) # turn off for validation?
         
         # get side views
+        if self.pc_rotate:
+            image = sv.points_to_images(au.augment(las_name), res_im = 128)
+        else:
+            image = sv.points_to_images(rl.read_las(las_name), res_im = 128)
         image = torch.from_numpy(image)
         
-        # augment images
+        # # augment images (by channel)
+        # if self.img_trans:
+        #     new_image = torch.zeros_like(image)
+        #     for c in range(0, image.shape[0]):
+        #         new_image[c,:,:] = self.img_trans(image[c,:,:])
+        #     image = new_image
+        #     del new_image
+        
+        # augment images (all channels at once)
         if self.img_trans:
             image = self.img_trans(image)
         
@@ -91,91 +105,30 @@ class TrainDataset_AllChannels():
     # training weights
     def weights(self):
         return torch.tensor(self.trees_frame["weight"].values)
-
-#%% setup new dataset class for testing
-
-# class TrainDataset_SingleChannel():
-#     """Tree species dataset."""
-
-#     # initialization
-#     def __init__(self, csv_file, root_dir, img_trans = None, channel = 0):
         
-#         """
-#         Arguments:
-#             csv_file (string): Path to the csv file with annotations with the collumns
-#                 0: filenme, 1: label_id, 2: tree height.
-#             root_dir (string): Directory with all the las files.
-#             img_trans (callable, optional): Optional transform to be applied
-#                 on a sample.
-#         """
-        
-#         # set attributes
-#         self.trees_frame = pd.read_csv(csv_file)
-#         self.root_dir    = root_dir
-#         self.img_trans   = img_trans
-#         self.channel     = channel
-    
-#     # length
-#     def __len__(self):
-#         return len(self.trees_frame)
-    
-#     # indexing
-#     def __getitem__(self, idx):
-        
-#         # convert indices to list
-#         if torch.is_tensor(idx):
-#             idx = idx.tolist()
-        
-#         # get full las path
-#         las_name = os.path.join(
-#             self.root_dir,
-#             *self.trees_frame.iloc[idx, 0].split('/'))
-#         image = sv.points_to_images(au.augment(las_name)) # turn off for validation?
-        
-#         # get selected side & top views
-#         image = torch.from_numpy(image[self.channel,:,:])
-#         image = torch.unsqueeze(image, dim = 0)
-        
-#         # augment images
-#         if self.img_trans:
-#             image = self.img_trans(image)
-        
-#         # get height
-#         height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype = torch.float32)
-        
-#         # get species
-#         label = torch.tensor(self.trees_frame.iloc[idx, 1], dtype = torch.int64)
-        
-#         # return images with labels
-#         return image, height, label
-    
-#     # training weights
-#     def weights(self):
-#         return torch.tensor(self.trees_frame["weight"].values)
-        
-#%% setup dataset & dataloader
+#%% testing dataset & dataloader
 
 # # setting up image augmentation
-# trafo = transforms.Compose([
+# img_trans = transforms.Compose([
 #     transforms.ToPILImage(),
-#     transforms.Resize(64), # for testing the model
+#     transforms.RandomHorizontalFlip(),
 #     transforms.ToTensor()])
 
 # # create dataset object
-# # dataset = TrainDataset_SingleChannel(path_csv_train, path_las, img_trans = trafo) # without
-# dataset = TrainDataset_SingleChannel(path_csv_train, path_las, img_trans = trafo) # with
+# dataset = TrainDataset_AllChannels(path_csv_train, path_las) # without
+# dataset = TrainDataset_AllChannels(path_csv_train, path_las, img_trans = img_trans) # with
 
-# # # show image
-# # plt.imshow(dataset[0][0][0,:,:], interpolation = 'nearest')
-# # plt.show()
+# # show image
+# plt.imshow(dataset[0][0][0,0,:,:], interpolation = 'nearest')
+# plt.show()
 
 # # define a sampler
 # train_size = 2**13
 # sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement = True)
 
 # # create data loader
-# batch_size = 2**4
-# dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True) #, num_workers = 32)
+# batch_size = 2**3
+# dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True)
 
 # # # test output of iterator
 # # image, height, label = next(iter(dataloader))
@@ -185,42 +138,14 @@ class TrainDataset_AllChannels():
 
 # # create data loader
 # batch_size_test = 100
-# dataloader_test = torch.utils.data.DataLoader(dataset, batch_size = batch_size_test, sampler = sampler, pin_memory = True) #, num_workers = 4
+# dataloader_test = torch.utils.data.DataLoader(dataset, batch_size = batch_size_test, sampler = sampler, pin_memory = True)
 
 # # check value distribution
 # image, height, label = next(iter(dataloader_test))
 # plt.hist(height.numpy(), bins = 33); plt.show()
 # plt.hist(label.numpy(), bins = 33); plt.show()
 
-#%% setup model
-
-# # load the model
-# model = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
-
-# # change first layer
-# model.features[0].in_channels = 1
-# model.features[0].weight = torch.nn.Parameter(model.features[0].weight.sum(dim = 1, keepdim = True))
-
-# # change last layer
-# model.classifier.out_features = int(n_class)
-
-# # get the device
-# device = (
-#     "cuda"
-#     if torch.cuda.is_available()
-#     else "mps"
-#     if torch.backends.mps.is_available()
-#     else "cpu")
-
-# # give to devise
-# model.to(device)
-
-# # define loss function and optimizer
-# criterion = torch.nn.CrossEntropyLoss() # laut dem simpleview paper vllt smooth loss?
-# optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
-
 #%% setup simple view
-
 
 # https://github.com/isaaccorley/simpleview-pytorch/blob/main/simpleview_pytorch/simpleview.py
 class SimpleView(torch.nn.Module):
@@ -255,17 +180,24 @@ class SimpleView(torch.nn.Module):
 
 #%% prepare simple view
 
+# setting up image augmentation
+img_trans = transforms.Compose([
+    transforms.RandomHorizontalFlip(0.25),
+    transforms.RandomRotation(10),
+    transforms.RandomAffine(
+        degrees = 10, translate = (0.25, 0.25), scale = (0.75, 1.25))
+    ])
+
 # prepare data
-dataset = TrainDataset_AllChannels(path_csv_train, path_las)
+dataset = TrainDataset_AllChannels(path_csv_train, path_las, img_trans = img_trans)
 
 # define a sampler
 train_size = 2**13
 sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement = True)
 
 # create data loader
-batch_size = 2**4
-dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True) #, num_workers = 32)
-
+batch_size = 2**3
+dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True)
 
 # load the model
 model = SimpleView(num_views = 7, num_classes = n_class)
@@ -287,14 +219,15 @@ model.to(device)
 # preds = model(inputs)
 
 # define loss function and optimizer
-criterion = torch.nn.CrossEntropyLoss() # laut dem simpleview paper vllt smooth loss?
+criterion = torch.nn.CrossEntropyLoss(label_smoothing = 0.2)
 optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode = 'min', patience = 5, verbose = True)
 
 #%% training loop
 
 # prepare validation data for checking
 vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las)
-vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = 2**4, shuffle = True, pin_memory = True) #, num_workers = 32)
+vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = 2**3, shuffle = True, pin_memory = True)
 
 # prepare training
 num_epochs = 100
@@ -327,11 +260,9 @@ for epoch in range(num_epochs):
         loss.backward()
         optimizer.step()
         
-        # print statistics every 100 batches
+        # print loss every 100 batches
         running_loss += loss.item()
         if i % 100 == 99:
-            
-            # loss
             print('[epoch: %d, batch: %5d] loss: %.3f' %
                   (epoch + 1, i + 1, running_loss / 100))
             running_loss = 0.0
@@ -356,6 +287,9 @@ for epoch in range(num_epochs):
     print('[epoch: %d] validation loss: %.3f' %
           (epoch + 1, avg_v_loss))
     
+    # adjust learning rate
+    scheduler.step(avg_v_loss)
+    
     # save best model
     if avg_v_loss < best_v_loss:
         best_v_loss = avg_v_loss
@@ -366,7 +300,7 @@ for epoch in range(num_epochs):
         last_improvement += 1
     
     # check how long last improvement was ago
-    if last_improvement > 5:
+    if last_improvement > 10:
         break
 
 torch.cuda.empty_cache()
@@ -376,7 +310,7 @@ print('\nFinished training\n')
 
 # load best model
 model = SimpleView(num_views = 7, num_classes = n_class)
-model.load_state_dict(torch.load("model_2023051718_16"))
+model.load_state_dict(torch.load("model_2023052202_9"))
 
 # get the device
 device = (
@@ -394,7 +328,7 @@ model.eval()
 
 # prepare data for validation
 vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las)
-vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = int(n_vali/10), pin_memory = True) #, num_workers = 32)
+vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = 2**3, pin_memory = True)
 
 # create metrics
 accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = int(n_class)).to(device)
