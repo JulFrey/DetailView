@@ -20,6 +20,7 @@ import datetime
 import augmentation as au
 import sideview as sv
 import read_las as rl
+import parallel_densenet as net
 
 # set  number of classess
 n_class = 33
@@ -38,7 +39,7 @@ class TrainDataset_AllChannels():
     """Tree species dataset."""
     
     # initialization
-    def __init__(self, csv_file, root_dir, img_trans = None, pc_rotate = True):
+    def __init__(self, csv_file, root_dir, img_trans = None, pc_rotate = True, height_noise = 0):
         
         """
         Arguments:
@@ -50,10 +51,11 @@ class TrainDataset_AllChannels():
         """
         
         # set attributes
-        self.trees_frame = pd.read_csv(csv_file)
-        self.root_dir    = root_dir
-        self.img_trans   = img_trans
-        self.pc_rotate   = pc_rotate
+        self.trees_frame  = pd.read_csv(csv_file)
+        self.root_dir     = root_dir
+        self.img_trans    = img_trans
+        self.pc_rotate    = pc_rotate
+        self.height_noise = height_noise
     
     # length
     def __len__(self):
@@ -95,6 +97,10 @@ class TrainDataset_AllChannels():
         
         # get height
         height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype = torch.float32)
+        
+        # augment height
+        if self.height_noise > 0:
+            height += np.random.normal(0, self.height_noise)
         
         # get species
         label = torch.tensor(self.trees_frame.iloc[idx, 1], dtype = torch.int64)
@@ -185,11 +191,10 @@ img_trans = transforms.Compose([
     transforms.RandomHorizontalFlip(0.25),
     transforms.RandomRotation(10),
     transforms.RandomAffine(
-        degrees = 10, translate = (0.25, 0.25), scale = (0.75, 1.25))
-    ])
+        degrees = 10, translate = (0.25, 0.25), scale = (0.75, 1.25))])
 
 # prepare data
-dataset = TrainDataset_AllChannels(path_csv_train, path_las, img_trans = img_trans)
+dataset = TrainDataset_AllChannels(path_csv_train, path_las, img_trans = img_trans, height_noise = 0.01)
 
 # define a sampler
 train_size = 2**13
@@ -200,7 +205,8 @@ batch_size = 2**3
 dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True)
 
 # load the model
-model = SimpleView(num_views = 7, num_classes = n_class)
+# model = SimpleView(num_views = 7, num_classes = n_class)
+model = net.ParallelDenseNet(n_class)
 
 # get the device
 device = (
@@ -215,8 +221,8 @@ model.to(device)
 
 # # get test prediction
 # inputs, heights, labels = next(iter(dataloader))
-# inputs, labels = inputs.to(device), labels.to(device)
-# preds = model(inputs)
+# inputs, heights, labels = inputs.to(device), heights.to(device), labels.to(device)
+# preds = model(inputs, heights)
 
 # define loss function and optimizer
 criterion = torch.nn.CrossEntropyLoss(label_smoothing = 0.2)
@@ -248,14 +254,16 @@ for epoch in range(num_epochs):
             print('[epoch: %d] dataset: %.2f%%' % (epoch + 1, progress * 100))
         
         # load data
-        inputs, height, labels = data
-        inputs, labels = inputs.to(device), labels.to(device)
+        inputs, heights, labels = data
+        # inputs, labels = inputs.to(device), labels.to(device)
+        inputs, heights, labels = inputs.to(device), heights.to(device), labels.to(device)
         
         # zero the parameter gradients
         optimizer.zero_grad()
         
         # forward + backward + optimize
-        outputs = model(inputs)
+        # outputs = model(inputs)
+        outputs = model(inputs, heights)
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
@@ -268,7 +276,7 @@ for epoch in range(num_epochs):
             running_loss = 0.0
             
         # clear memory
-        del inputs, height, labels
+        del inputs, heights, labels
         torch.cuda.empty_cache()
             
     # validation loss
@@ -276,8 +284,10 @@ for epoch in range(num_epochs):
     model.eval()
     for j, v_data in enumerate(vali_dataloader, 0):
         v_inputs, v_heights, v_labels = next(iter(vali_dataloader))
-        v_inputs, v_labels = v_inputs.to("cuda"), v_labels.to("cuda")
-        v_outputs = model(v_inputs)
+        # v_inputs, v_labels = v_inputs.to(device), v_labels.to(device)
+        v_inputs, v_heights, v_labels = v_inputs.to(device), v_heights.to(device), v_labels.to(device)
+        # v_outputs = model(v_inputs)
+        v_outputs = model(v_inputs, v_heights)
         v_loss = criterion(v_outputs, v_labels)
         running_v_loss += v_loss.item()
         del v_inputs, v_heights, v_labels
@@ -337,10 +347,12 @@ f1 = torchmetrics.F1Score(task = "multiclass", num_classes = int(n_class)).to(de
 # iterate over validation dataloader in batches
 for data in vali_dataloader:
     v_inputs, v_heights, v_labels = data
-    v_inputs, v_labels = v_inputs.to(device), v_labels.to(device)
-
+    # v_inputs, v_labels = v_inputs.to(device), v_labels.to(device)
+    v_inputs, v_heights, v_labels = v_inputs.to(device), v_heights.to(device), v_labels.to(device)
+    
     # get predictions
-    v_preds = model(v_inputs)
+    # v_preds = model(v_inputs)
+    v_preds = model(v_inputs, v_heights)
 
     # calculate metrics for the batch
     accuracy.update(v_preds, v_labels)

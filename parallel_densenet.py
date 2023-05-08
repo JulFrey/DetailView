@@ -15,44 +15,41 @@ class ParallelDenseNet(nn.Module):
         self.num_classes = num_classes
         
         # Define a single DenseNet
-        self.shared_densenet = torch.hub.load('pytorch/vision', 'densenet201', pretrained=False)
-        self.shared_densenet.features.conv0 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.shared_densenet = torch.hub.load('pytorch/vision', 'densenet201', weights = 'DenseNet201_Weights.DEFAULT')
+        self.shared_densenet.features[0].in_channels = 1
+        self.shared_densenet.features[0].weight = nn.Parameter(self.shared_densenet.features[0].weight.sum(dim = 1, keepdim = True))
         self.shared_densenet = nn.Sequential(*list(self.shared_densenet.features.children()))
+        
         # Define fully connected layers
-        self.fc1 = nn.Linear(1474559, 1024)
+        self.fc1 = nn.Linear(430080, 1024)
         self.fc2 = nn.Linear(1024, self.num_classes)
         self.flatten = nn.Flatten()
 
-    def forward(self, x1, x2, x3, x4, x5, x6, y):
+    def forward(self, inputs, heights):
+        
         # Pass each input tensor through the shared DenseNet
-        x1 = self.shared_densenet(x1)
-        x2 = self.shared_densenet(x2)
-        x3 = self.shared_densenet(x3)
-        x4 = self.shared_densenet(x4)
-        x5 = self.shared_densenet(x5)
-        x6 = self.shared_densenet(x6)
-
+        img1 = self.shared_densenet(inputs[:,0,:,:,:])
+        img2 = self.shared_densenet(inputs[:,1,:,:,:])
+        img3 = self.shared_densenet(inputs[:,2,:,:,:])
+        img4 = self.shared_densenet(inputs[:,3,:,:,:])
+        img5 = self.shared_densenet(inputs[:,4,:,:,:])
+        img6 = self.shared_densenet(inputs[:,5,:,:,:])
+        img7 = self.shared_densenet(inputs[:,6,:,:,:])
+        del inputs
+        
         # Concatenate the output tensors from all branches
-        x = torch.cat((x1, x2, x3, x4, x5, x6), dim=1)
-        x = self.flatten(x)
+        img = torch.cat((img1, img2, img3, img4, img5, img6, img7), dim = 1)
+        img = self.flatten(img)
 
         # Broadcast the float input tensor to match the size of x
-        y = y.view(-1, 1)
-        y = y.expand(-1, x.shape[1] - 1)
+        heights = heights.view(-1, 1).expand(-1, img.shape[1])
 
         # Concatenate the float input to the flattened tensor
-        x = torch.cat((x, y), dim=1)
+        img = torch.cat((img, heights), dim = 1)
 
         # Pass the concatenated tensor through fully connected layers
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
+        img = self.fc1(img)
+        img = F.relu(img)
+        img = self.fc2(img)
 
-        return x
-
-
-# Define the model and loss function
-model = ParallelDenseNet(num_classes=33)
-criterion = nn.SmoothL1Loss()
-
-# Define optimizer
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+        return img
