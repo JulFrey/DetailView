@@ -10,49 +10,57 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class ParallelDenseNet(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, num_views):
         super(ParallelDenseNet, self).__init__()
         self.num_classes = num_classes
+        self.num_views = num_views
         
-        # Define a single DenseNet
-        self.shared_densenet = torch.hub.load('pytorch/vision', 'densenet201', pretrained=False)
-        self.shared_densenet.features.conv0 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.shared_densenet = nn.Sequential(*list(self.shared_densenet.features.children()))
-        # Define fully connected layers
-        self.fc1 = nn.Linear(1474559, 1024)
-        self.fc2 = nn.Linear(1024, self.num_classes)
+        # define a single DenseNet
+        self.shared_densenet = torch.hub.load('pytorch/vision', 'densenet201', weights = 'DenseNet201_Weights.DEFAULT')
+        self.shared_densenet.features[0].in_channels = 1
+        self.shared_densenet.features[0].weight = nn.Parameter(self.shared_densenet.features[0].weight.sum(dim = 1, keepdim = True))
+        
+        # remove effect of classifier
+        z_dim = self.shared_densenet.classifier.in_features
+        self.shared_densenet.classifier = nn.Identity()
+        
+        # define flattener
         self.flatten = nn.Flatten()
+        
+        # define float pathway
+        self.float_pathway = nn.Sequential(
+            nn.Linear(1, 64),
+            nn.ReLU(),
+            nn.Linear(64, z_dim))
+        
+        # create new classifier
+        self.classifier = nn.Linear(
+                   in_features = z_dim * (num_views + 1),
+                   out_features = num_classes)
 
-    def forward(self, x1, x2, x3, x4, x5, x6, y):
-        # Pass each input tensor through the shared DenseNet
-        x1 = self.shared_densenet(x1)
-        x2 = self.shared_densenet(x2)
-        x3 = self.shared_densenet(x3)
-        x4 = self.shared_densenet(x4)
-        x5 = self.shared_densenet(x5)
-        x6 = self.shared_densenet(x6)
+    def forward(self, inputs, heights):
+        
+        # pass each input tensor through the shared DenseNet
+        img1 = self.shared_densenet(inputs[:,0,:,:,:])
+        img2 = self.shared_densenet(inputs[:,1,:,:,:])
+        img3 = self.shared_densenet(inputs[:,2,:,:,:])
+        img4 = self.shared_densenet(inputs[:,3,:,:,:])
+        img5 = self.shared_densenet(inputs[:,4,:,:,:])
+        img6 = self.shared_densenet(inputs[:,5,:,:,:])
+        img7 = self.shared_densenet(inputs[:,6,:,:,:])
+        del inputs
+        
+        # concatenate the output tensors from all branches
+        img = torch.cat((img1, img2, img3, img4, img5, img6, img7), dim = 1)
+        img = self.flatten(img)
+        
+        # using height float
+        heights = self.float_pathway(heights.view(-1, 1))
 
-        # Concatenate the output tensors from all branches
-        x = torch.cat((x1, x2, x3, x4, x5, x6), dim=1)
-        x = self.flatten(x)
+        # cncatenate the float input to the flattened tensor
+        img = torch.cat((img, heights), dim = 1)
 
-        # Broadcast the float input tensor to match the size of x
-        y = y.view(-1, 1)
-        y = y.expand(-1, x.shape[1] - 1)
+        # pass the concatenated tensor through fully connected layers
+        label = self.classifier(img)
 
-        # Concatenate the float input to the flattened tensor
-        x = torch.cat((x, y), dim=1)
-
-        # Pass the concatenated tensor through fully connected layers
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-
-        return x
-
-
-# Define the model and loss function
-model = ParallelDenseNet(num_classes=33)
-criterion = nn.SmoothL1Loss()
-
-# Define optimizer
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+        return label

@@ -71,7 +71,8 @@ def points_to_images(points, res_im = 256, num_side = 4, plot = False,
     views[0,:,:] = topview(points, res_im = res_im, plot = plot)
     
     # loop through perspectives
-    deg_steps = np.linspace(0, 180, num = num_side)
+    deg_steps = np.arange(0, 360, 360/num_side)
+    # deg_steps = np.linspace(0, 180, num = num_side)
     for i in range(num_side):
         if debug: print('sideview: ' + str(i))
         
