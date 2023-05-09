@@ -77,9 +77,9 @@ class TrainDataset_AllChannels():
         
         # get side views
         if self.pc_rotate:
-            image = sv.points_to_images(au.augment(las_name), res_im = 128)
+            image = sv.points_to_images(au.augment(las_name), res_im = 256)
         else:
-            image = sv.points_to_images(rl.read_las(las_name), res_im = 128)
+            image = sv.points_to_images(rl.read_las(las_name), res_im = 256)
         image = torch.from_numpy(image)
         
         # # augment images (by channel)

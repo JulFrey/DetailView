@@ -34,9 +34,11 @@ class ParallelDenseNet(nn.Module):
             nn.Linear(64, z_dim))
         
         # create new classifier
-        self.classifier = nn.Linear(
-                   in_features = z_dim * (self.n_views + 1),
-                   out_features = self.n_classes)
+        self.classifier = nn.Sequential(
+            nn.Linear(in_features = z_dim * (self.n_views + 1), out_features = 256),
+            nn.ReLU(),
+            nn.Linear(in_features = 256, out_features = self.n_classes)
+            )
 
     def forward(self, inputs, heights):
         
