@@ -8,13 +8,14 @@ Created on Thu Apr 20 12:26:11 2023
 # import packages
 import os
 import torch
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import torchmetrics
-import torchvision
-from torchvision import transforms
 import datetime
+import torchmetrics
+import numpy as np
+import pandas as pd
+from torchvision import transforms
+
+#import matplotlib.pyplot as plt
+#import torchvision
 
 # import own functions
 import augmentation as au
@@ -22,9 +23,10 @@ import sideview as sv
 import read_las as rl
 import parallel_densenet as net
 
-# set  number of classess
-n_class = 33
-n_vali = 400
+# set parameters
+n_class = 33 # number of classes
+n_vali  = 400 # number of validation data points
+n_view  = 7  # number of views
 
 # set paths
 path_csv_train = r"C:\Baumartenklassifizierung\train_labels.csv" #r"S:\3D4EcoTec\train_labels.csv"
@@ -151,45 +153,11 @@ class TrainDataset_AllChannels():
 # plt.hist(height.numpy(), bins = 33); plt.show()
 # plt.hist(label.numpy(), bins = 33); plt.show()
 
-#%% setup simple view
-
-# # https://github.com/isaaccorley/simpleview-pytorch/blob/main/simpleview_pytorch/simpleview.py
-# class SimpleView(torch.nn.Module):
-
-#     def __init__(self, num_views: int, num_classes: int):
-#         super().__init__()
-        
-#         # load backbone
-#         backbone = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
-        
-#         # change first layer to greyscale
-#         backbone.features[0].in_channels = 1
-#         backbone.features[0].weight = torch.nn.Parameter(backbone.features[0].weight.sum(dim = 1, keepdim = True))
-        
-#         # remove effect of classifier
-#         z_dim = backbone.classifier.in_features
-#         backbone.classifier = torch.nn.Identity()
-        
-#         # add new classifier
-#         self.backbone = backbone
-#         self.classifier = torch.nn.Linear(
-#             in_features = z_dim * num_views,
-#             out_features = num_classes)
-
-#     def forward(self, x: torch.Tensor) -> torch.Tensor:
-#         b, v, c, h, w = x.shape
-#         x = x.reshape(b * v, c, h, w) # batch * views
-#         z = self.backbone(x)
-#         z = z.reshape(b, v, -1)
-#         z = z.reshape(b, -1)
-#         return self.classifier(z)
-
 #%% prepare simple view
 
 # setting up image augmentation
 img_trans = transforms.Compose([
     transforms.RandomHorizontalFlip(0.5),
-    # transforms.RandomRotation(10),
     transforms.RandomAffine(
         degrees = 10, translate = (0.25, 0.25), scale = (0.75, 1.25))])
 
@@ -205,8 +173,7 @@ batch_size = 2**3
 dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True)
 
 # load the model
-# model = SimpleView(num_views = 7, num_classes = n_class)
-model = net.ParallelDenseNet(n_class, num_views = 7)
+model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
 
 # get the device
 device = (
@@ -248,21 +215,14 @@ for epoch in range(num_epochs):
     # loop through whole dataset?
     for i, data in enumerate(dataloader, 0): 
         
-        # print progress every ten batches
-        if i % 10 == 9:
-            progress = (i / len(dataloader))
-            print('[epoch: %d] dataset: %.2f%%' % (epoch + 1, progress * 100))
-        
         # load data
         inputs, heights, labels = data
-        # inputs, labels = inputs.to(device), labels.to(device)
         inputs, heights, labels = inputs.to(device), heights.to(device), labels.to(device)
         
         # zero the parameter gradients
         optimizer.zero_grad()
         
         # forward + backward + optimize
-        # outputs = model(inputs)
         outputs = model(inputs, heights)
         loss = criterion(outputs, labels)
         loss.backward()
@@ -271,10 +231,10 @@ for epoch in range(num_epochs):
         # print loss every 100 batches
         running_loss += loss.item()
         if i % 100 == 99:
-            print('[epoch: %d, batch: %5d] loss: %.3f' %
-                  (epoch + 1, i + 1, running_loss / 100))
+            print('[epoch: %d, batch: %d, dataset: %.2f%%] loss: %.4f' %
+                  (epoch + 1, i + 1, i / len(dataloader) * 100, running_loss / 100))
             running_loss = 0.0
-            
+        
         # clear memory
         del inputs, heights, labels
         torch.cuda.empty_cache()
@@ -284,9 +244,7 @@ for epoch in range(num_epochs):
     model.eval()
     for j, v_data in enumerate(vali_dataloader, 0):
         v_inputs, v_heights, v_labels = next(iter(vali_dataloader))
-        # v_inputs, v_labels = v_inputs.to(device), v_labels.to(device)
         v_inputs, v_heights, v_labels = v_inputs.to(device), v_heights.to(device), v_labels.to(device)
-        # v_outputs = model(v_inputs)
         v_outputs = model(v_inputs, v_heights)
         v_loss = criterion(v_outputs, v_labels)
         running_v_loss += v_loss.item()
@@ -294,7 +252,7 @@ for epoch in range(num_epochs):
         torch.cuda.empty_cache()
     avg_v_loss = running_v_loss / len(vali_dataloader)
     model.train()
-    print('[epoch: %d] validation loss: %.3f' %
+    print('[epoch: %d] validation loss: %.4f' %
           (epoch + 1, avg_v_loss))
     
     # adjust learning rate
@@ -319,7 +277,7 @@ print('\nFinished training\n')
 #%% validating cnn
 
 # load best model
-model = SimpleView(num_views = 7, num_classes = n_class)
+model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
 model.load_state_dict(torch.load("model_2023052202_9"))
 
 # get the device
@@ -347,11 +305,9 @@ f1 = torchmetrics.F1Score(task = "multiclass", num_classes = int(n_class)).to(de
 # iterate over validation dataloader in batches
 for data in vali_dataloader:
     v_inputs, v_heights, v_labels = data
-    # v_inputs, v_labels = v_inputs.to(device), v_labels.to(device)
     v_inputs, v_heights, v_labels = v_inputs.to(device), v_heights.to(device), v_labels.to(device)
     
     # get predictions
-    # v_preds = model(v_inputs)
     v_preds = model(v_inputs, v_heights)
 
     # calculate metrics for the batch

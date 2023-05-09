@@ -6,17 +6,17 @@ Created on Fri May  5 15:43:42 2023
 """
 
 import torch
+import torchvision
 import torch.nn as nn
-import torch.nn.functional as F
 
 class ParallelDenseNet(nn.Module):
-    def __init__(self, num_classes, num_views):
+    def __init__(self, n_classes, n_views):
         super(ParallelDenseNet, self).__init__()
-        self.num_classes = num_classes
-        self.num_views = num_views
+        self.n_classes = n_classes
+        self.n_views = n_views
         
         # define a single DenseNet
-        self.shared_densenet = torch.hub.load('pytorch/vision', 'densenet201', weights = 'DenseNet201_Weights.DEFAULT')
+        self.shared_densenet = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
         self.shared_densenet.features[0].in_channels = 1
         self.shared_densenet.features[0].weight = nn.Parameter(self.shared_densenet.features[0].weight.sum(dim = 1, keepdim = True))
         
@@ -35,8 +35,8 @@ class ParallelDenseNet(nn.Module):
         
         # create new classifier
         self.classifier = nn.Linear(
-                   in_features = z_dim * (num_views + 1),
-                   out_features = num_classes)
+                   in_features = z_dim * (self.n_views + 1),
+                   out_features = self.n_classes)
 
     def forward(self, inputs, heights):
         
@@ -50,17 +50,18 @@ class ParallelDenseNet(nn.Module):
         img7 = self.shared_densenet(inputs[:,6,:,:,:])
         del inputs
         
-        # concatenate the output tensors from all branches
+        # concatenate output tensors from all branches
         img = torch.cat((img1, img2, img3, img4, img5, img6, img7), dim = 1)
         img = self.flatten(img)
         
         # using height float
         heights = self.float_pathway(heights.view(-1, 1))
 
-        # cncatenate the float input to the flattened tensor
+        # concatenate float input to flattened tensor
         img = torch.cat((img, heights), dim = 1)
 
         # pass the concatenated tensor through fully connected layers
         label = self.classifier(img)
-
+        
+        # return predicted label
         return label
