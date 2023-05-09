@@ -10,10 +10,8 @@ import torchvision
 import torch.nn as nn
 
 class ParallelDenseNet(nn.Module):
-    def __init__(self, n_classes, n_views):
+    def __init__(self, n_classes: int, n_views: int):
         super(ParallelDenseNet, self).__init__()
-        self.n_classes = n_classes
-        self.n_views = n_views
         
         # define a single DenseNet
         self.shared_densenet = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
@@ -35,12 +33,11 @@ class ParallelDenseNet(nn.Module):
         
         # create new classifier
         self.classifier = nn.Sequential(
-            nn.Linear(in_features = z_dim * (self.n_views + 1), out_features = 256),
+            nn.Linear(in_features = z_dim * (n_views + 1), out_features = 256),
             nn.ReLU(),
-            nn.Linear(in_features = 256, out_features = self.n_classes)
-            )
+            nn.Linear(in_features = 256, out_features = n_classes))
 
-    def forward(self, inputs, heights):
+    def forward(self, inputs: torch.Tensor, heights: torch.Tensor) -> torch.Tensor:
         
         # pass each input tensor through the shared DenseNet
         img1 = self.shared_densenet(inputs[:,0,:,:,:])
@@ -64,6 +61,35 @@ class ParallelDenseNet(nn.Module):
 
         # pass the concatenated tensor through fully connected layers
         label = self.classifier(img)
+
+# https://github.com/isaaccorley/simpleview-pytorch/blob/main/simpleview_pytorch/simpleview.py
+class SimpleView(nn.Module):
+    def __init__(self, n_classes: int, n_views: int):
+        super().__init__()
         
+        # load backbone
+        backbone = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
+        
+        # change first layer to greyscale
+        backbone.features[0].in_channels = 1
+        backbone.features[0].weight = torch.nn.Parameter(backbone.features[0].weight.sum(dim = 1, keepdim = True))
+        
+        # remove effect of classifier
+        z_dim = backbone.classifier.in_features
+        backbone.classifier = nn.Identity()
+
+        # add new classifier
+        self.backbone = backbone
+        self.classifier = nn.Linear(
+            in_features = z_dim * n_views,
+            out_features = n_classes)
+
+    def forward(self, inputs: torch.Tensor, heights: torch.Tensor) -> torch.Tensor:
+        b, v, c, h, w = inputs.shape
+        inputs = inputs.reshape(b * v, c, h, w)
+        z = self.backbone(inputs)
+        z = z.reshape(b, v, -1)
+        z = z.reshape(b, -1)
+        return self.classifier(z)
         # return predicted label
         return label
