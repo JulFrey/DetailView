@@ -29,9 +29,9 @@ n_vali  = 400 # number of validation data points
 n_view  = 7  # number of views
 
 # set paths
-path_csv_train = r"C:\Baumartenklassifizierung\train_labels.csv" #r"S:\3D4EcoTec\train_labels.csv"
-path_csv_vali  = r"C:\Baumartenklassifizierung\vali_labels.csv" #r"S:\3D4EcoTec\vali_labels.csv"
-path_las       = r"C:\Baumartenklassifizierung\data\down"
+path_csv_train = r"C:\TLS\down\train_labels.csv" #r"S:\3D4EcoTec\train_labels.csv"
+path_csv_vali  = r"C:\TLS\down\vali_labels.csv" #r"S:\3D4EcoTec\vali_labels.csv"
+path_las       = r"C:\TLS\down"
 
 #%% setup new dataset class
 
@@ -159,7 +159,7 @@ class TrainDataset_AllChannels():
 img_trans = transforms.Compose([
     transforms.RandomHorizontalFlip(0.5),
     transforms.RandomAffine(
-        degrees = 10, translate = (0.25, 0.25), scale = (0.75, 1.25))])
+        degrees = 0, translate = (0.1, 0.1), scale = (0.9, 1.1))])
 
 # prepare data
 dataset = TrainDataset_AllChannels(path_csv_train, path_las, img_trans = img_trans, height_noise = 0.01)
@@ -194,7 +194,7 @@ model.to(device)
 # define loss function and optimizer
 criterion = torch.nn.CrossEntropyLoss(label_smoothing = 0.2)
 optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode = 'min', patience = 5, verbose = True)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode = 'min', patience = 5, verbose = True, factor = 0.5)
 
 #%% training loop
 
@@ -208,9 +208,14 @@ best_v_loss = 1000
 last_improvement = 0
 timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M')
 
+# save loss
+ls_loss = []
+ls_v_loss = []
+
 # loop through epochs
 for epoch in range(num_epochs):
     running_loss = 0.0
+    running_epoch_loss = 0.0
     
     # loop through whole dataset?
     for i, data in enumerate(dataloader, 0): 
@@ -228,6 +233,9 @@ for epoch in range(num_epochs):
         loss.backward()
         optimizer.step()
         
+        # update epoch loss
+        running_epoch_loss += loss.item()
+        
         # print loss every 100 batches
         running_loss += loss.item()
         if i % 100 == 99:
@@ -241,6 +249,7 @@ for epoch in range(num_epochs):
             
     # validation loss
     running_v_loss = 0
+    accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = int(n_class)).to(device)
     model.eval()
     for j, v_data in enumerate(vali_dataloader, 0):
         v_inputs, v_heights, v_labels = next(iter(vali_dataloader))
@@ -248,12 +257,16 @@ for epoch in range(num_epochs):
         v_outputs = model(v_inputs, v_heights)
         v_loss = criterion(v_outputs, v_labels)
         running_v_loss += v_loss.item()
+        accuracy.update(v_outputs, v_labels)
         del v_inputs, v_heights, v_labels
         torch.cuda.empty_cache()
     avg_v_loss = running_v_loss / len(vali_dataloader)
+    final_accuracy = accuracy.compute()
     model.train()
-    print('[epoch: %d] validation loss: %.4f' %
-          (epoch + 1, avg_v_loss))
+    print('[epoch: %d] validation loss: %.4f, accuracy: %.4f' %
+          (epoch + 1, avg_v_loss, final_accuracy))
+    ls_loss.append(running_epoch_loss / len(dataloader))
+    ls_v_loss.append(avg_v_loss)    
     
     # adjust learning rate
     scheduler.step(avg_v_loss)
