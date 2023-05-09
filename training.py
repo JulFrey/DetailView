@@ -206,7 +206,7 @@ vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = 2**3, s
 num_epochs = 100
 best_v_loss = 1000
 last_improvement = 0
-timestamp = datetime.datetime.now().strftime('%Y%m%H%M')
+timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M')
 
 # loop through epochs
 for epoch in range(num_epochs):
