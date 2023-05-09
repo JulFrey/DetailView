@@ -61,6 +61,9 @@ class ParallelDenseNet(nn.Module):
 
         # pass the concatenated tensor through fully connected layers
         label = self.classifier(img)
+        
+        # return predicted label
+        return label
 
 # https://github.com/isaaccorley/simpleview-pytorch/blob/main/simpleview_pytorch/simpleview.py
 class SimpleView(nn.Module):
@@ -91,5 +94,3 @@ class SimpleView(nn.Module):
         z = z.reshape(b, v, -1)
         z = z.reshape(b, -1)
         return self.classifier(z)
-        # return predicted label
-        return label
