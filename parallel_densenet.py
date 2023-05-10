@@ -65,6 +65,36 @@ class ParallelDenseNet(nn.Module):
         # return predicted label
         return label
 
+# # https://github.com/isaaccorley/simpleview-pytorch/blob/main/simpleview_pytorch/simpleview.py
+# class SimpleView(nn.Module):
+#     def __init__(self, n_classes: int, n_views: int):
+#         super().__init__()
+        
+#         # load backbone
+#         backbone = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
+        
+#         # change first layer to greyscale
+#         backbone.features[0].in_channels = 1
+#         backbone.features[0].weight = torch.nn.Parameter(backbone.features[0].weight.sum(dim = 1, keepdim = True))
+        
+#         # remove effect of classifier
+#         z_dim = backbone.classifier.in_features
+#         backbone.classifier = nn.Identity()
+
+#         # add new classifier
+#         self.backbone = backbone
+#         self.classifier = nn.Linear(
+#             in_features = z_dim * n_views,
+#             out_features = n_classes)
+
+#     def forward(self, inputs: torch.Tensor, heights: torch.Tensor) -> torch.Tensor:
+#         b, v, c, h, w = inputs.shape
+#         inputs = inputs.reshape(b * v, c, h, w)
+#         z = self.backbone(inputs)
+#         z = z.reshape(b, v, -1)
+#         z = z.reshape(b, -1)
+#         return self.classifier(z)
+
 # https://github.com/isaaccorley/simpleview-pytorch/blob/main/simpleview_pytorch/simpleview.py
 class SimpleView(nn.Module):
     def __init__(self, n_classes: int, n_views: int):
@@ -81,16 +111,22 @@ class SimpleView(nn.Module):
         z_dim = backbone.classifier.in_features
         backbone.classifier = nn.Identity()
 
-        # add new classifier
+        # add new classifier & float pathway
         self.backbone = backbone
+        self.float_pathway = nn.Sequential(
+            nn.Linear(1, 128),
+            nn.ReLU(),
+            nn.Linear(128, z_dim),
+            nn.ReLU())
         self.classifier = nn.Linear(
-            in_features = z_dim * n_views,
+            in_features = z_dim * (n_views + 1),
             out_features = n_classes)
 
     def forward(self, inputs: torch.Tensor, heights: torch.Tensor) -> torch.Tensor:
         b, v, c, h, w = inputs.shape
         inputs = inputs.reshape(b * v, c, h, w)
-        z = self.backbone(inputs)
-        z = z.reshape(b, v, -1)
-        z = z.reshape(b, -1)
-        return self.classifier(z)
+        img = self.backbone(inputs)
+        img = img.reshape(b, v, -1).reshape(b, -1)
+        hei = self.float_pathway(heights.view(-1, 1))
+        img = torch.cat((img, hei), dim = 1)
+        return self.classifier(img)
