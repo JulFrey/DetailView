@@ -129,30 +129,35 @@ class TrainDataset_AllChannels():
         
 #%% testing dataset & dataloader
 
-# setting up image augmentation
-img_trans = transforms.Compose([
-    transforms.RandomHorizontalFlip()])
+# # setting up image augmentation
+# img_trans = transforms.Compose([
+#     transforms.RandomVerticalFlip(0.5),
+#     transforms.RandomAffine(
+#         degrees = 0, translate = (0.1, 0.1), scale = (0.9, 1.1))])
 
-# create dataset object
-dataset = TrainDataset_AllChannels(path_csv_train, path_las) # without
-dataset = TrainDataset_AllChannels(path_csv_train, path_las, img_trans = img_trans) # with
+# # create dataset object
+# dataset = TrainDataset_AllChannels(path_csv_train, path_las) # without
+# dataset = TrainDataset_AllChannels(path_csv_train, path_las, img_trans = img_trans) # with
 
-# # show image
-# plt.imshow(dataset[0][0][0,0,:,:], interpolation = 'nearest')
-# plt.show()
+# # # show image
+# # plt.imshow(dataset[0][0][0,0,:,:], interpolation = 'nearest')
+# # plt.show()
 
-# define a sampler
-train_size = 2**13
-sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement = True)
+# # define a sampler
+# train_size = 2**13
+# sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement = True)
 
-# create data loader
-batch_size = 2**1
-dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True)
+# # create data loader
+# batch_size = 2**0
+# dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True)
 
-# test output of iterator
-image, height, label = next(iter(dataloader))
-print(image.shape); print(height.shape); print(label.shape)
-print(height)
+# # # test output of iterator
+# # image, height, label = next(iter(dataloader))
+# # print(image.shape); print(height.shape); print(label.shape)
+
+# # # show image
+# # plt.imshow(image[0,2,0,:,:], interpolation = 'nearest')
+# # plt.show()
 
 #%% checking value distribution
 
@@ -169,7 +174,7 @@ print(height)
 
 # setting up image augmentation
 img_trans = transforms.Compose([
-    transforms.RandomHorizontalFlip(0.5),
+    transforms.RandomVerticalFlip(0.5),
     transforms.RandomAffine(
         degrees = 0, translate = (0.1, 0.1), scale = (0.9, 1.1))])
 
