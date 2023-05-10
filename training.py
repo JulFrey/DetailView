@@ -24,14 +24,21 @@ import read_las as rl
 import parallel_densenet as net
 
 # set parameters
-n_class = 33 # number of classes
+n_class = 33  # number of classes
 n_vali  = 400 # number of validation data points
-n_view  = 7  # number of views
+n_view  = 7   # number of views
 
 # set paths
-path_csv_train = r"C:\TLS\down\train_labels.csv" #r"S:\3D4EcoTec\train_labels.csv"
-path_csv_vali  = r"C:\TLS\down\vali_labels.csv" #r"S:\3D4EcoTec\vali_labels.csv"
+path_csv_train = r"C:\TLS\down\train_labels.csv"
+path_csv_vali  = r"C:\TLS\down\vali_labels.csv"
 path_las       = r"C:\TLS\down"
+
+#%% get height mean & sd
+
+# get mean & sd of height from training data
+train_metadata = pd.read_csv(path_csv_train)
+train_height_mean = np.mean(train_metadata["tree_H"])
+train_height_sd = np.std(train_metadata["tree_H"])
 
 #%% setup new dataset class
 
@@ -41,7 +48,8 @@ class TrainDataset_AllChannels():
     """Tree species dataset."""
     
     # initialization
-    def __init__(self, csv_file, root_dir, img_trans = None, pc_rotate = True, height_noise = 0):
+    def __init__(self, csv_file, root_dir, img_trans = None, pc_rotate = True,
+                 height_noise = 0.01, height_mean = train_height_mean, height_sd = train_height_sd):
         
         """
         Arguments:
@@ -58,6 +66,8 @@ class TrainDataset_AllChannels():
         self.img_trans    = img_trans
         self.pc_rotate    = pc_rotate
         self.height_noise = height_noise
+        self.height_mean  = height_mean
+        self.height_sd    = height_sd
     
     # length
     def __len__(self):
@@ -77,9 +87,9 @@ class TrainDataset_AllChannels():
         
         # get side views
         if self.pc_rotate:
-            image = sv.points_to_images(au.augment(las_name), res_im = 256)
+            image = sv.points_to_images(au.augment(las_name), res_im = 128)
         else:
-            image = sv.points_to_images(rl.read_las(las_name), res_im = 256)
+            image = sv.points_to_images(rl.read_las(las_name), res_im = 128)
         image = torch.from_numpy(image)
         
         # # augment images (by channel)
@@ -104,6 +114,9 @@ class TrainDataset_AllChannels():
         if self.height_noise > 0:
             height += np.random.normal(0, self.height_noise)
         
+        # scale height using training mean & sd
+        height = (height - self.height_mean) / self.height_sd
+        
         # get species
         label = torch.tensor(self.trees_frame.iloc[idx, 1], dtype = torch.int64)
         
@@ -116,31 +129,30 @@ class TrainDataset_AllChannels():
         
 #%% testing dataset & dataloader
 
-# # setting up image augmentation
-# img_trans = transforms.Compose([
-#     transforms.ToPILImage(),
-#     transforms.RandomHorizontalFlip(),
-#     transforms.ToTensor()])
+# setting up image augmentation
+img_trans = transforms.Compose([
+    transforms.RandomHorizontalFlip()])
 
-# # create dataset object
-# dataset = TrainDataset_AllChannels(path_csv_train, path_las) # without
-# dataset = TrainDataset_AllChannels(path_csv_train, path_las, img_trans = img_trans) # with
+# create dataset object
+dataset = TrainDataset_AllChannels(path_csv_train, path_las) # without
+dataset = TrainDataset_AllChannels(path_csv_train, path_las, img_trans = img_trans) # with
 
 # # show image
 # plt.imshow(dataset[0][0][0,0,:,:], interpolation = 'nearest')
 # plt.show()
 
-# # define a sampler
-# train_size = 2**13
-# sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement = True)
+# define a sampler
+train_size = 2**13
+sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement = True)
 
-# # create data loader
-# batch_size = 2**3
-# dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True)
+# create data loader
+batch_size = 2**1
+dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True)
 
-# # # test output of iterator
-# # image, height, label = next(iter(dataloader))
-# # print(image.shape); print(height.shape); print(label.shape)
+# test output of iterator
+image, height, label = next(iter(dataloader))
+print(image.shape); print(height.shape); print(label.shape)
+print(height)
 
 #%% checking value distribution
 
@@ -173,7 +185,8 @@ batch_size = 2**3
 dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True)
 
 # load the model
-model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
+# model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
+model = net.SimpleView(n_classes = n_class, n_views = n_view)
 
 # get the device
 device = (
@@ -199,7 +212,7 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode = 'min', 
 #%% training loop
 
 # prepare validation data for checking
-vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las)
+vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las, pc_rotate = False, height_noise = 0)
 vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = 2**3, shuffle = True, pin_memory = True)
 
 # prepare training
@@ -263,7 +276,7 @@ for epoch in range(num_epochs):
     avg_v_loss = running_v_loss / len(vali_dataloader)
     final_accuracy = accuracy.compute()
     model.train()
-    print('[epoch: %d] validation loss: %.4f, accuracy: %.4f' %
+    print('[epoch: %d, validation] loss: %.4f, accuracy: %.4f' %
           (epoch + 1, avg_v_loss, final_accuracy))
     ls_loss.append(running_epoch_loss / len(dataloader))
     ls_v_loss.append(avg_v_loss)    
@@ -289,48 +302,49 @@ print('\nFinished training\n')
 
 #%% validating cnn
 
-# load best model
-model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
-model.load_state_dict(torch.load("model_2023052202_9"))
+# # load best model
+# # model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
+# model = net.SimpleView(n_classes = n_class, n_views = n_view)
+# model.load_state_dict(torch.load("model_2023052202_9"))
 
-# get the device
-device = (
-    "cuda"
-    if torch.cuda.is_available()
-    else "mps"
-    if torch.backends.mps.is_available()
-    else "cpu")
+# # get the device
+# device = (
+#     "cuda"
+#     if torch.cuda.is_available()
+#     else "mps"
+#     if torch.backends.mps.is_available()
+#     else "cpu")
 
-# give to device
-model.to(device)
+# # give to device
+# model.to(device)
 
-# turn on evaluation mode
-model.eval()
+# # turn on evaluation mode
+# model.eval()
 
-# prepare data for validation
-vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las)
-vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = 2**3, pin_memory = True)
+# # prepare data for validation
+# vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las, pc_rotate = False, height_noise = 0)
+# vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = 2**3, pin_memory = True)
 
-# create metrics
-accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = int(n_class)).to(device)
-f1 = torchmetrics.F1Score(task = "multiclass", num_classes = int(n_class)).to(device)
+# # create metrics
+# accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = int(n_class)).to(device)
+# f1 = torchmetrics.F1Score(task = "multiclass", num_classes = int(n_class)).to(device)
 
-# iterate over validation dataloader in batches
-for data in vali_dataloader:
-    v_inputs, v_heights, v_labels = data
-    v_inputs, v_heights, v_labels = v_inputs.to(device), v_heights.to(device), v_labels.to(device)
+# # iterate over validation dataloader in batches
+# for data in vali_dataloader:
+#     v_inputs, v_heights, v_labels = data
+#     v_inputs, v_heights, v_labels = v_inputs.to(device), v_heights.to(device), v_labels.to(device)
     
-    # get predictions
-    v_preds = model(v_inputs, v_heights)
+#     # get predictions
+#     v_preds = model(v_inputs, v_heights)
 
-    # calculate metrics for the batch
-    accuracy.update(v_preds, v_labels)
-    f1.update(v_preds, v_labels)
+#     # calculate metrics for the batch
+#     accuracy.update(v_preds, v_labels)
+#     f1.update(v_preds, v_labels)
 
-# get the final metrics
-final_accuracy = accuracy.compute()
-final_f1 = f1.compute()
+# # get the final metrics
+# final_accuracy = accuracy.compute()
+# final_f1 = f1.compute()
 
-# print final metrics
-print('accuracy: %.3f' % final_accuracy)
-print('f1: %.3f' % final_f1)
+# # print final metrics
+# print('accuracy: %.3f' % final_accuracy)
+# print('f1: %.3f' % final_f1)
