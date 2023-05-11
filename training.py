@@ -24,16 +24,16 @@ import read_las as rl
 import parallel_densenet as net
 
 # set parameters
-n_class = 33  # number of classes
-n_vali  = 400 # number of validation data points
-n_view  = 7   # number of views
+n_class = 33    # number of classes
+n_vali  = 400   # number of validation data points
+n_view  = 7     # number of views
+n_batch = 2**3  # batch size
+n_train = 2**13 # training dataset size
 
 # set paths
 path_csv_train = r"C:\TLS\down\train_labels.csv"
 path_csv_vali  = r"C:\TLS\down\vali_labels.csv"
 path_las       = r"C:\TLS\down"
-
-#%% get height mean & sd
 
 # get mean & sd of height from training data
 train_metadata = pd.read_csv(path_csv_train)
@@ -144,8 +144,7 @@ class TrainDataset_AllChannels():
 # # plt.show()
 
 # # define a sampler
-# train_size = 2**13
-# sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement = True)
+# sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), n_train, replacement = True)
 
 # # create data loader
 # batch_size = 2**0
@@ -175,19 +174,17 @@ class TrainDataset_AllChannels():
 # setting up image augmentation
 img_trans = transforms.Compose([
     transforms.RandomVerticalFlip(0.5),
-    transforms.RandomAffine(
-        degrees = 0, translate = (0.1, 0.1), scale = (0.9, 1.1))])
+    transforms.RandomAffine(degrees = 0, translate = (0.1, 0.1), scale = (0.9, 1.1))
+    ])
 
 # prepare data
 dataset = TrainDataset_AllChannels(path_csv_train, path_las, img_trans = img_trans, height_noise = 0.01)
 
 # define a sampler
-train_size = 2**13
-sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), train_size, replacement = True)
+sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), n_train, replacement = True)
 
 # create data loader
-batch_size = 2**3
-dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True)
+dataloader = torch.utils.data.DataLoader(dataset, batch_size = n_batch, sampler = sampler, pin_memory = True)
 
 # load the model
 # model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
@@ -218,7 +215,7 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode = 'min', 
 
 # prepare validation data for checking
 vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las, pc_rotate = False, height_noise = 0)
-vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = 2**3, shuffle = True, pin_memory = True)
+vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_batch, shuffle = True, pin_memory = True)
 
 # prepare training
 num_epochs = 100
@@ -307,49 +304,49 @@ print('\nFinished training\n')
 
 #%% validating cnn
 
-# # load best model
-# # model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
-# model = net.SimpleView(n_classes = n_class, n_views = n_view)
-# model.load_state_dict(torch.load("model_2023052202_9"))
+# load best model
+# model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
+model = net.SimpleView(n_classes = n_class, n_views = n_view)
+model.load_state_dict(torch.load("model_202305101556_8"))
 
-# # get the device
-# device = (
-#     "cuda"
-#     if torch.cuda.is_available()
-#     else "mps"
-#     if torch.backends.mps.is_available()
-#     else "cpu")
+# get the device
+device = (
+    "cuda"
+    if torch.cuda.is_available()
+    else "mps"
+    if torch.backends.mps.is_available()
+    else "cpu")
 
-# # give to device
-# model.to(device)
+# give to device
+model.to(device)
 
-# # turn on evaluation mode
-# model.eval()
+# turn on evaluation mode
+model.eval()
 
-# # prepare data for validation
-# vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las, pc_rotate = False, height_noise = 0)
-# vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = 2**3, pin_memory = True)
+# prepare data for validation
+vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las, pc_rotate = False, height_noise = 0)
+vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_batch, pin_memory = True)
 
-# # create metrics
-# accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = int(n_class)).to(device)
-# f1 = torchmetrics.F1Score(task = "multiclass", num_classes = int(n_class)).to(device)
+# create metrics
+accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = int(n_class)).to(device)
+f1 = torchmetrics.F1Score(task = "multiclass", num_classes = int(n_class)).to(device)
 
-# # iterate over validation dataloader in batches
-# for data in vali_dataloader:
-#     v_inputs, v_heights, v_labels = data
-#     v_inputs, v_heights, v_labels = v_inputs.to(device), v_heights.to(device), v_labels.to(device)
+# iterate over validation dataloader in batches
+for data in vali_dataloader:
+    v_inputs, v_heights, v_labels = data
+    v_inputs, v_heights, v_labels = v_inputs.to(device), v_heights.to(device), v_labels.to(device)
     
-#     # get predictions
-#     v_preds = model(v_inputs, v_heights)
+    # get predictions
+    v_preds = model(v_inputs, v_heights)
 
-#     # calculate metrics for the batch
-#     accuracy.update(v_preds, v_labels)
-#     f1.update(v_preds, v_labels)
+    # calculate metrics for the batch
+    accuracy.update(v_preds, v_labels)
+    f1.update(v_preds, v_labels)
 
-# # get the final metrics
-# final_accuracy = accuracy.compute()
-# final_f1 = f1.compute()
+# get the final metrics
+final_accuracy = accuracy.compute()
+final_f1 = f1.compute()
 
-# # print final metrics
-# print('accuracy: %.3f' % final_accuracy)
-# print('f1: %.3f' % final_f1)
+# print final metrics
+print('accuracy: %.3f' % final_accuracy)
+print('f1: %.3f' % final_f1)
