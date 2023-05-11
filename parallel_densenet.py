@@ -95,7 +95,7 @@ class ParallelDenseNet(nn.Module):
 #         z = z.reshape(b, -1)
 #         return self.classifier(z)
 
-# https://github.com/isaaccorley/simpleview-pytorch/blob/main/simpleview_pytorch/simpleview.py
+# # https://github.com/isaaccorley/simpleview-pytorch/blob/main/simpleview_pytorch/simpleview.py
 class SimpleView(nn.Module):
     def __init__(self, n_classes: int, n_views: int):
         super().__init__()
@@ -118,9 +118,10 @@ class SimpleView(nn.Module):
             nn.ReLU(),
             nn.Linear(128, z_dim),
             nn.ReLU())
-        self.classifier = nn.Linear(
-            in_features = z_dim * (n_views + 1),
-            out_features = n_classes)
+        self.classifier = nn.Sequential(
+            nn.Linear(in_features = z_dim * (n_views + 1), out_features = 256),
+            nn.ReLU(),
+            nn.Linear(in_features = 256, out_features = n_classes))
 
     def forward(self, inputs: torch.Tensor, heights: torch.Tensor) -> torch.Tensor:
         b, v, c, h, w = inputs.shape
