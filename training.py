@@ -173,8 +173,8 @@ class TrainDataset_AllChannels():
 
 # setting up image augmentation
 img_trans = transforms.Compose([
-    transforms.RandomVerticalFlip(0.5),
-    transforms.RandomAffine(degrees = 0, translate = (0.1, 0.1), scale = (0.9, 1.1))
+    transforms.RandomVerticalFlip(0.5)#,
+    # transforms.RandomAffine(degrees = 0, translate = (0.1, 0.1), scale = (0.9, 1.1))
     ])
 
 # prepare data
@@ -207,9 +207,9 @@ model.to(device)
 # preds = model(inputs, heights)
 
 # define loss function and optimizer
-criterion = torch.nn.CrossEntropyLoss(label_smoothing = 0.2)
+criterion = torch.nn.CrossEntropyLoss() #(label_smoothing = 0.2)
 optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode = 'min', patience = 5, verbose = True, factor = 0.5)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode = 'min', patience = 3, verbose = True, factor = 0.5)
 
 #%% training loop
 
@@ -296,7 +296,7 @@ for epoch in range(num_epochs):
         last_improvement += 1
     
     # check how long last improvement was ago
-    if last_improvement > 10:
+    if last_improvement > 6:
         break
 
 torch.cuda.empty_cache()
@@ -307,7 +307,7 @@ print('\nFinished training\n')
 # load best model
 # model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
 model = net.SimpleView(n_classes = n_class, n_views = n_view)
-model.load_state_dict(torch.load("model_202305101556_8"))
+model.load_state_dict(torch.load("model_202305110742_20"))
 
 # get the device
 device = (
