@@ -14,9 +14,9 @@ from sklearn.preprocessing import LabelEncoder, scale
 #%% prepare labels
 
 # set paths
-path_csv = r"S:\3D4EcoTec\tree_metadata_training_publish.csv"
-path_las = r"S:\3D4EcoTec\down"
-path_out = r"S:\3D4EcoTec"
+path_csv = r"C:\TLS\down\tree_metadata_training_publish.csv"
+path_las = r"C:\TLS\down"
+path_out = r"C:\TLS\down"
 
 # set validation dataset length
 validation_len = 400
@@ -58,7 +58,7 @@ selected_indices = [np.random.randint(0, parameters.shape[0])]
 distances = arr_point_dist(parameters, parameters[selected_indices[0],:])
 
 # loop through all points
-for i in range(1, validation_len):
+for i in range(1, validation_len * 2):
     
     # sample indices dependig on distance from selected point
     far_away_idx = np.random.choice(np.arange(len(distances)), p = (distances**2)/np.sum(distances**2))
@@ -71,6 +71,9 @@ for i in range(1, validation_len):
     
     # update distances with minimum distance between old and new distances
     distances = np.minimum(distances, new_distances)
+
+# get random half of the indices
+selected_indices = np.random.choice(selected_indices, size = validation_len, replace = False)
 
 # subset data based on indices
 vali = labels[labels.index.isin(selected_indices)].copy()

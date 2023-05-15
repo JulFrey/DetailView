@@ -81,7 +81,7 @@ class SimpleView(nn.Module):
         z_dim = sides.classifier.in_features
         sides.classifier = nn.Identity()
         
-        # load model for datails
+        # load model for details
         details = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
         
         # change first layer to greyscale
