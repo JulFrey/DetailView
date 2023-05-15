@@ -12,9 +12,9 @@ import datetime
 import torchmetrics
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from torchvision import transforms
 
-#import matplotlib.pyplot as plt
 #import torchvision
 
 # import own functions
@@ -301,8 +301,17 @@ for epoch in range(num_epochs):
     if last_improvement > 6:
         break
 
+# finish training
 torch.cuda.empty_cache()
 print('\nFinished training\n')
+
+#% plotting loss
+plt.plot(range(1, len(ls_loss) + 1), ls_loss, color = "cornflowerblue", label = "Training loss")
+plt.plot(range(1, len(ls_v_loss) + 1), ls_v_loss, color = "salmon", label = "Validation loss")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+plt.show()
 
 #%% validating cnn
 
