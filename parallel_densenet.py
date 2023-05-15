@@ -66,54 +66,36 @@ class ParallelDenseNet(nn.Module):
         return label
 
 # # https://github.com/isaaccorley/simpleview-pytorch/blob/main/simpleview_pytorch/simpleview.py
-# class SimpleView(nn.Module):
-#     def __init__(self, n_classes: int, n_views: int):
-#         super().__init__()
-        
-#         # load backbone
-#         backbone = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
-        
-#         # change first layer to greyscale
-#         backbone.features[0].in_channels = 1
-#         backbone.features[0].weight = torch.nn.Parameter(backbone.features[0].weight.sum(dim = 1, keepdim = True))
-        
-#         # remove effect of classifier
-#         z_dim = backbone.classifier.in_features
-#         backbone.classifier = nn.Identity()
-
-#         # add new classifier
-#         self.backbone = backbone
-#         self.classifier = nn.Linear(
-#             in_features = z_dim * n_views,
-#             out_features = n_classes)
-
-#     def forward(self, inputs: torch.Tensor, heights: torch.Tensor) -> torch.Tensor:
-#         b, v, c, h, w = inputs.shape
-#         inputs = inputs.reshape(b * v, c, h, w)
-#         z = self.backbone(inputs)
-#         z = z.reshape(b, v, -1)
-#         z = z.reshape(b, -1)
-#         return self.classifier(z)
-
-# # https://github.com/isaaccorley/simpleview-pytorch/blob/main/simpleview_pytorch/simpleview.py
 class SimpleView(nn.Module):
     def __init__(self, n_classes: int, n_views: int):
         super().__init__()
         
-        # load backbone
-        backbone = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
+        # load model for sideviews
+        sides = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
         
         # change first layer to greyscale
-        backbone.features[0].in_channels = 1
-        backbone.features[0].weight = torch.nn.Parameter(backbone.features[0].weight.sum(dim = 1, keepdim = True))
+        sides.features[0].in_channels = 1
+        sides.features[0].weight = torch.nn.Parameter(sides.features[0].weight.sum(dim = 1, keepdim = True))
         
         # remove effect of classifier
-        z_dim = backbone.classifier.in_features
-        backbone.classifier = nn.Identity()
-
+        z_dim = sides.classifier.in_features
+        sides.classifier = nn.Identity()
+        
+        # load model for datails
+        details = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
+        
+        # change first layer to greyscale
+        details.features[0].in_channels = 1
+        details.features[0].weight = torch.nn.Parameter(details.features[0].weight.sum(dim = 1, keepdim = True))
+        
+        # remove effect of classifier
+        z_dim = details.classifier.in_features
+        details.classifier = nn.Identity()
+        
         # add new classifier & float pathway
-        self.backbone = backbone
-        self.float_pathway = nn.Sequential(
+        self.sides_pathway = sides
+        self.details_pathway = details
+        self.height_pathway = nn.Sequential(
             nn.Linear(1, 128),
             nn.ReLU(),
             nn.Linear(128, z_dim),
@@ -124,10 +106,24 @@ class SimpleView(nn.Module):
             nn.Linear(in_features = 256, out_features = n_classes))
 
     def forward(self, inputs: torch.Tensor, heights: torch.Tensor) -> torch.Tensor:
+        
+        # prepare data
         b, v, c, h, w = inputs.shape
-        inputs = inputs.reshape(b * v, c, h, w)
-        img = self.backbone(inputs)
-        img = img.reshape(b, v, -1).reshape(b, -1)
-        hei = self.float_pathway(heights.view(-1, 1))
-        img = torch.cat((img, hei), dim = 1)
-        return self.classifier(img)
+        sides = inputs[:,0:-1,:,:,:].reshape(b * (v - 1), c, h, w)
+        details = inputs[:,-1,:,:,:].reshape(b * 1, c, h, w)
+        del inputs
+        
+        # process sideviews
+        sides = self.sides_pathway(sides)
+        sides = sides.reshape(b, (v - 1), -1).reshape(b, -1)
+        
+        # process details
+        details = self.details_pathway(details)
+        details = details.reshape(b, 1, -1).reshape(b, -1)
+        
+        # process height
+        heights = self.height_pathway(heights.view(-1, 1))
+        
+        # get label
+        label = self.classifier(torch.cat((sides, details, heights), dim = 1))
+        return label

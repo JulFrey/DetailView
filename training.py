@@ -280,6 +280,8 @@ for epoch in range(num_epochs):
     model.train()
     print('[epoch: %d, validation] loss: %.4f, accuracy: %.4f' %
           (epoch + 1, avg_v_loss, final_accuracy))
+    
+    # append lists tracking loss
     ls_loss.append(running_epoch_loss / len(dataloader))
     ls_v_loss.append(avg_v_loss)    
     
@@ -307,7 +309,7 @@ print('\nFinished training\n')
 # load best model
 # model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
 model = net.SimpleView(n_classes = n_class, n_views = n_view)
-model.load_state_dict(torch.load("model_202305110742_20"))
+model.load_state_dict(torch.load("model_202305120750_42"))
 
 # get the device
 device = (
@@ -325,15 +327,15 @@ model.eval()
 
 # prepare data for validation
 vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las, pc_rotate = False, height_noise = 0)
-vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_batch, pin_memory = True)
+vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_batch, shuffle = True, pin_memory = True)
 
 # create metrics
 accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = int(n_class)).to(device)
 f1 = torchmetrics.F1Score(task = "multiclass", num_classes = int(n_class)).to(device)
 
 # iterate over validation dataloader in batches
-for data in vali_dataloader:
-    v_inputs, v_heights, v_labels = data
+for i, v_data in enumerate(vali_dataloader, 0):
+    v_inputs, v_heights, v_labels = next(iter(vali_dataloader))
     v_inputs, v_heights, v_labels = v_inputs.to(device), v_heights.to(device), v_labels.to(device)
     
     # get predictions
