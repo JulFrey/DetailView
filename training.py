@@ -215,7 +215,7 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode = 'min', 
 
 # prepare validation data for checking
 vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las, pc_rotate = False, height_noise = 0)
-vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_batch, shuffle = True, pin_memory = True)
+vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_batch, shuffle = False, pin_memory = True)
 
 # prepare training
 num_epochs = 100
@@ -327,7 +327,7 @@ model.eval()
 
 # prepare data for validation
 vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las, pc_rotate = False, height_noise = 0)
-vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_batch, shuffle = True, pin_memory = True)
+vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_batch, shuffle = False, pin_memory = True)
 
 # create metrics
 accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = int(n_class)).to(device)
