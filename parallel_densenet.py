@@ -5,6 +5,7 @@ Created on Fri May  5 15:43:42 2023
 @author: Julian
 """
 
+# import packages
 import torch
 import torchvision
 import torch.nn as nn
@@ -70,7 +71,7 @@ class SimpleView(nn.Module):
     def __init__(self, n_classes: int, n_views: int):
         super().__init__()
         
-        # load model for sideviews
+        # load model for horizontal views
         horizontal = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
         
         # change first layer to greyscale
@@ -81,7 +82,7 @@ class SimpleView(nn.Module):
         z_dim = horizontal.classifier.in_features
         horizontal.classifier = nn.Identity()
         
-        # load model for sideviews
+        # load model for vertical views
         vertical = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
         
         # change first layer to greyscale
@@ -124,11 +125,11 @@ class SimpleView(nn.Module):
         details = inputs[:,-1,:,:,:].reshape(b * 1, c, h, w)
         del inputs
         
-        # process sideviews
+        # process horizontal views
         horizontal = self.horizontal_pathway(horizontal)
         horizontal = horizontal.reshape(b, (v - 3), -1).reshape(b, -1)
         
-        # process sideviews
+        # process vertical views
         vertical = self.vertical_pathway(vertical)
         vertical = vertical.reshape(b, 2, -1).reshape(b, -1)
         

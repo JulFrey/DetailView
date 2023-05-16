@@ -15,9 +15,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from torchvision import transforms
 
-#import torchvision
-
-# import own functions
+# import own scripts
 import augmentation as au
 import sideview as sv
 import read_las as rl
@@ -157,24 +155,11 @@ class TrainDataset_AllChannels():
 # # plt.imshow(image[0,2,0,:,:], interpolation = 'nearest')
 # # plt.show()
 
-#%% checking value distribution
-
-# # create data loader
-# batch_size_test = 100
-# dataloader_test = torch.utils.data.DataLoader(dataset, batch_size = batch_size_test, sampler = sampler, pin_memory = True)
-
-# # check value distribution
-# image, height, label = next(iter(dataloader_test))
-# plt.hist(height.numpy(), bins = 33); plt.show()
-# plt.hist(label.numpy(), bins = 33); plt.show()
-
 #%% prepare simple view
 
 # setting up image augmentation
 img_trans = transforms.Compose([
-    transforms.RandomVerticalFlip(0.5)#,
-    # transforms.RandomAffine(degrees = 0, translate = (0.1, 0.1), scale = (0.9, 1.1))
-    ])
+    transforms.RandomVerticalFlip(0.5)])
 
 # prepare data
 dataset = TrainDataset_AllChannels(path_csv_train, path_las, img_trans = img_trans, height_noise = 0.01)
@@ -308,7 +293,7 @@ for epoch in range(num_epochs):
 torch.cuda.empty_cache()
 print('\nFinished training\n')
 
-#% plotting loss
+# plot loss
 plt.plot(range(1, len(ls_loss) + 1), ls_loss, color = "cornflowerblue", label = "Training loss")
 plt.plot(range(1, len(ls_v_loss) + 1), ls_v_loss, color = "salmon", label = "Validation loss")
 plt.xlabel("Epoch")

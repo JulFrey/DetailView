@@ -6,19 +6,11 @@ Created on Tue Apr 18 08:55:35 2023
 """
 
 # import packages
-# import os
-# import glob
-# import laspy as lp
 import read_las as rl
 import numpy as np
 
-# # set paths & variables
-# path_las = r"D:\Baumartenklassifizierung\data\train_downsampled"
-
-#%%
-
 def augment(path_las, rotate_h_max = 22.5, rotate_v_max = 180,
-            translate_max = 0.25, sampling_max = 0.1):
+            sampling_max = 0.1):
     
     """
     Parameters
@@ -31,9 +23,6 @@ def augment(path_las, rotate_h_max = 22.5, rotate_v_max = 180,
     rotate_v_max : float, optional
         Maximum random rotation along the vertical axis in degree. The default
         is 180.
-    translate_max : float, optional
-        Maximum random translation relative to the maximum expansion from the
-        center as a fraction. The default is 0.25.
     sampling_max : float, optional
         Maximum downsampling as a fraction. The default is 0.1.
 
@@ -86,13 +75,3 @@ def augment(path_las, rotate_h_max = 22.5, rotate_v_max = 180,
     
     # return path
     return points
-
-#%%
-
-# # execution for all training las files
-# for path_curr in glob.glob(os.path.join(path_las, "*.las")):
-#     augment(path_curr)
-
-# execution for a single file
-# pts = augment(r"D:\Baumartenklassifizierung\data\train_downsampled\03498.las")
-# print(pts.shape)
