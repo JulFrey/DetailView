@@ -71,27 +71,27 @@ class SimpleView(nn.Module):
         super().__init__()
         
         # load model for sideviews
-        sides = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
+        horizontal = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
         
         # change first layer to greyscale
-        sides.features[0].in_channels = 1
-        sides.features[0].weight = torch.nn.Parameter(sides.features[0].weight.sum(dim = 1, keepdim = True))
+        horizontal.features[0].in_channels = 1
+        horizontal.features[0].weight = torch.nn.Parameter(horizontal.features[0].weight.sum(dim = 1, keepdim = True))
         
         # remove effect of classifier
-        z_dim = sides.classifier.in_features
-        sides.classifier = nn.Identity()
+        z_dim = horizontal.classifier.in_features
+        horizontal.classifier = nn.Identity()
         
         # load model for sideviews
-        tops = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
+        vertical = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
         
         # change first layer to greyscale
-        tops.features[0].in_channels = 1
-        tops.features[0].weight = torch.nn.Parameter(sides.features[0].weight.sum(dim = 1, keepdim = True))
+        vertical.features[0].in_channels = 1
+        vertical.features[0].weight = torch.nn.Parameter(vertical.features[0].weight.sum(dim = 1, keepdim = True))
         
         # remove effect of classifier
-        tops.classifier = nn.Identity()
+        vertical.classifier = nn.Identity()
         
-        # load model for datails
+        # load model for details
         details = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
         
         # change first layer to greyscale
@@ -102,8 +102,8 @@ class SimpleView(nn.Module):
         details.classifier = nn.Identity()
         
         # add new classifier & float pathway
-        self.sides_pathway = sides
-        self.tops_pathway = tops
+        self.horizontal_pathway = horizontal
+        self.vertical_pathway = vertical
         self.details_pathway = details
         self.height_pathway = nn.Sequential(
             nn.Linear(1, 128),
@@ -119,18 +119,18 @@ class SimpleView(nn.Module):
         
         # prepare data
         b, v, c, h, w = inputs.shape
-        sides = inputs[:,1:-2,:,:,:].reshape(b * (v - 3), c, h, w)
-        tops = inputs[:,[0,-2],:,:,:].reshape(b * 2, c, h, w)
+        horizontal = inputs[:,1:-2,:,:,:].reshape(b * (v - 3), c, h, w)
+        vertical = inputs[:,[0,-2],:,:,:].reshape(b * 2, c, h, w)
         details = inputs[:,-1,:,:,:].reshape(b * 1, c, h, w)
         del inputs
         
         # process sideviews
-        sides = self.sides_pathway(sides)
-        sides = sides.reshape(b, (v - 3), -1).reshape(b, -1)
+        horizontal = self.horizontal_pathway(horizontal)
+        horizontal = horizontal.reshape(b, (v - 3), -1).reshape(b, -1)
         
         # process sideviews
-        tops = self.tops_pathway(tops)
-        tops = tops.reshape(b, 2, -1).reshape(b, -1)
+        vertical = self.vertical_pathway(vertical)
+        vertical = vertical.reshape(b, 2, -1).reshape(b, -1)
         
         # process details
         details = self.details_pathway(details)
@@ -140,5 +140,5 @@ class SimpleView(nn.Module):
         heights = self.height_pathway(heights.view(-1, 1))
         
         # get label
-        label = self.classifier(torch.cat((sides,tops, details, heights), dim = 1))
+        label = self.classifier(torch.cat((horizontal, vertical, details, heights), dim = 1))
         return label
