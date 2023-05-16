@@ -25,9 +25,8 @@ import parallel_densenet as net
 
 # set parameters
 n_class = 33    # number of classes
-n_vali  = 400   # number of validation data points
 n_view  = 7     # number of views
-n_batch = 2**4  # batch size
+n_batch = 2**3  # batch size
 n_train = 2**13 # training dataset size
 
 # set paths
@@ -271,7 +270,7 @@ for epoch in range(num_epochs):
     accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = int(n_class)).to(device)
     model.eval()
     for j, v_data in enumerate(vali_dataloader, 0):
-        v_inputs, v_heights, v_labels = next(iter(vali_dataloader))
+        v_inputs, v_heights, v_labels = v_data
         v_inputs, v_heights, v_labels = v_inputs.to(device), v_heights.to(device), v_labels.to(device)
         v_outputs = model(v_inputs, v_heights)
         v_loss = criterion(v_outputs, v_labels)
@@ -348,7 +347,7 @@ f1 = torchmetrics.F1Score(task = "multiclass", num_classes = int(n_class)).to(de
 
 # iterate over validation dataloader in batches
 for i, v_data in enumerate(vali_dataloader, 0):
-    v_inputs, v_heights, v_labels = next(iter(vali_dataloader))
+    v_inputs, v_heights, v_labels = v_data
     v_inputs, v_heights, v_labels = v_inputs.to(device), v_heights.to(device), v_labels.to(device)
     
     # get predictions
