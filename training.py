@@ -27,7 +27,7 @@ import parallel_densenet as net
 n_class = 33    # number of classes
 n_vali  = 400   # number of validation data points
 n_view  = 7     # number of views
-n_batch = 2**3  # batch size
+n_batch = 2**4  # batch size
 n_train = 2**13 # training dataset size
 
 # set paths
@@ -261,7 +261,11 @@ for epoch in range(num_epochs):
         # clear memory
         del inputs, heights, labels
         torch.cuda.empty_cache()
-            
+        
+    # clear memory
+    del running_loss
+    torch.cuda.empty_cache()
+        
     # validation loss
     running_v_loss = 0
     accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = int(n_class)).to(device)
