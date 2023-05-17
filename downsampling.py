@@ -99,7 +99,7 @@ for path_curr in glob.glob(os.path.join(path_las, "*.las")):
     filename = os.path.basename(path_sub)
     path_sub = os.path.join(lowest_folder, filename)
     
-    # append data frame
+    # append dataframe
     curr = pd.DataFrame({"filename": [path_sub], "species_id": [-999], "tree_H": [height]})
     df = pd.concat([df, curr], ignore_index = True)
         
