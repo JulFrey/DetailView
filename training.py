@@ -28,9 +28,11 @@ n_batch = 2**3  # batch size
 n_train = 2**13 # training dataset size
 
 # set paths
-path_csv_train = r"C:\TLS\down\train_labels.csv"
-path_csv_vali  = r"C:\TLS\down\vali_labels.csv"
-path_las       = r"C:\TLS\down"
+path_csv_lookup = r"C:\TLS\down\lookup.csv"
+path_csv_train  = r"C:\TLS\down\train_labels.csv"
+path_csv_vali   = r"C:\TLS\down\vali_labels.csv"
+path_csv_test   = r"C:\TLS\down\test_labels.csv"
+path_las        = r"C:\TLS\down"
 
 # get mean & sd of height from training data
 train_metadata = pd.read_csv(path_csv_train)
@@ -46,7 +48,8 @@ class TrainDataset_AllChannels():
     
     # initialization
     def __init__(self, csv_file, root_dir, img_trans = None, pc_rotate = True,
-                 height_noise = 0.01, height_mean = train_height_mean, height_sd = train_height_sd):
+                 height_noise = 0.01, height_mean = train_height_mean,
+                 height_sd = train_height_sd, test = False):
         
         """
         Arguments:
@@ -65,6 +68,7 @@ class TrainDataset_AllChannels():
         self.height_noise = height_noise
         self.height_mean  = height_mean
         self.height_sd    = height_sd
+        self.test         = test
     
     # length
     def __len__(self):
@@ -89,14 +93,6 @@ class TrainDataset_AllChannels():
             image = sv.points_to_images(rl.read_las(las_name), res_im = 128)
         image = torch.from_numpy(image)
         
-        # # augment images (by channel)
-        # if self.img_trans:
-        #     new_image = torch.zeros_like(image)
-        #     for c in range(0, image.shape[0]):
-        #         new_image[c,:,:] = self.img_trans(image[c,:,:])
-        #     image = new_image
-        #     del new_image
-        
         # augment images (all channels at once)
         if self.img_trans:
             image = self.img_trans(image)
@@ -114,17 +110,20 @@ class TrainDataset_AllChannels():
         # scale height using training mean & sd
         height = (height - self.height_mean) / self.height_sd
         
-        # get species
-        label = torch.tensor(self.trees_frame.iloc[idx, 1], dtype = torch.int64)
+        # return images with filenames
+        if self.test:
+            las_path = self.trees_frame.iloc[idx, 0]
+            return image, height, las_path
         
         # return images with labels
+        label = torch.tensor(self.trees_frame.iloc[idx, 1], dtype = torch.int64)
         return image, height, label
     
     # training weights
     def weights(self):
         return torch.tensor(self.trees_frame["weight"].values)
         
-#%% testing dataset & dataloader
+#%% test dataset & dataloader
 
 # # setting up image augmentation
 # img_trans = transforms.Compose([
@@ -185,15 +184,15 @@ device = (
 # give to device
 model.to(device)
 
-# # get test prediction
-# inputs, heights, labels = next(iter(dataloader))
-# inputs, heights, labels = inputs.to(device), heights.to(device), labels.to(device)
-# preds = model(inputs, heights)
-
 # define loss function and optimizer
 criterion = torch.nn.CrossEntropyLoss() #(label_smoothing = 0.2)
 optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode = 'min', patience = 3, verbose = True, factor = 0.5)
+
+# # get test prediction
+# inputs, heights, labels = next(iter(dataloader))
+# inputs, heights, labels = inputs.to(device), heights.to(device), labels.to(device)
+# preds = model(inputs, heights)
 
 #%% training loop
 
@@ -243,6 +242,7 @@ for epoch in range(num_epochs):
             running_loss = 0.0
         
         # clear memory
+        inputs = heights = labels = 0
         del inputs, heights, labels
         torch.cuda.empty_cache()
         
@@ -261,6 +261,7 @@ for epoch in range(num_epochs):
         v_loss = criterion(v_outputs, v_labels)
         running_v_loss += v_loss.item()
         accuracy.update(v_outputs, v_labels)
+        v_inputs = v_heights = v_labels = 0
         del v_inputs, v_heights, v_labels
         torch.cuda.empty_cache()
     avg_v_loss = running_v_loss / len(vali_dataloader)
@@ -301,12 +302,12 @@ plt.ylabel("Loss")
 plt.legend()
 plt.show()
 
-#%% validating cnn
+#%% validate cnn
 
 # load best model
 # model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
 model = net.SimpleView(n_classes = n_class, n_views = n_view)
-model.load_state_dict(torch.load("model_202305120750_42"))
+model.load_state_dict(torch.load("model_"))
 
 # get the device
 device = (
@@ -349,3 +350,72 @@ final_f1 = f1.compute()
 # print final metrics
 print('accuracy: %.3f' % final_accuracy)
 print('f1: %.3f' % final_f1)
+
+#%% make predictions
+
+# load best model
+# model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
+model = net.SimpleView(n_classes = n_class, n_views = n_view)
+model.load_state_dict(torch.load("model_"))
+
+# get the device
+device = (
+    "cuda"
+    if torch.cuda.is_available()
+    else "mps"
+    if torch.backends.mps.is_available()
+    else "cpu")
+
+# give to device
+model.to(device)
+
+# turn on evaluation mode
+model.eval()
+
+# setting up image augmentation
+img_trans = transforms.Compose([
+    transforms.RandomVerticalFlip(0.5)])
+
+# prepare data for testing
+test_dataset = TrainDataset_AllChannels(path_csv_test, path_las,  img_trans = img_trans, pc_rotate = True, height_noise = 0.01, test = True)
+test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size = 1, shuffle = False, pin_memory = True)
+
+# create dictionary for the accumulated probabilities for each data point
+data_probs = {i: [] for i in range(len(test_dataset))}
+
+# iterate over the whole dataset 50 times
+for epoch in range(50):
+    
+    # iterate over validation dataloader in batches
+    for i, t_data in enumerate(test_dataloader, 0):
+        
+        # load the batch
+        t_inputs, t_heights, t_paths = t_data
+        t_inputs, t_heights = t_inputs.to(device), t_heights.to(device)
+        
+        # get predictions
+        t_preds = model(t_inputs, t_heights)
+        t_probs = torch.nn.functional.softmax(t_preds, dim = 1)
+        
+        # accumulate probabilities for each data point
+        if len(data_probs[i]) == 0:
+            data_probs[i] = t_probs
+        else:
+            data_probs[i] += t_probs
+
+# get class id with maximum accumulated probabilities
+max_prob_class = {i: probs.index(max(probs)) for i, probs in data_probs.items()}
+
+# create dataframe
+df = pd.DataFrame({
+    "filename": test_dataset.trees_frame.iloc[:,0],
+    "species_id": max_prob_class.values()})
+
+# load lookup table
+lookup = pd.read_csv(path_csv_lookup)
+
+# join tables
+joined = pd.merge(df, lookup, on = 'species_id')
+
+# save data frame
+joined.to_csv("test_predictions.csv", index = False)
