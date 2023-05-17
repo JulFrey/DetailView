@@ -402,7 +402,7 @@ for epoch in range(50):
         
         # accumulate probabilities for each data point
         for i, path in enumerate(t_paths):
-            if data_probs[path] == []:
+            if not data_probs[path]:
                 data_probs[path] = t_probs[i,:]
             else:
                 data_probs[path] += t_probs[i,:]
@@ -417,11 +417,10 @@ df = pd.DataFrame({
     "filename": max_prob_class.keys(),
     "species_id": max_prob_class.values()})
 
-# load lookup table
+# add species name
 lookup = pd.read_csv(path_csv_lookup)
-
-# join tables
 joined = pd.merge(df, lookup, on = 'species_id')
+# joined = joined.drop("species_id", axis = 1)
 
 # save data frame
 joined.to_csv("test_predictions.csv", index = False)
