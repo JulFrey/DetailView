@@ -307,7 +307,7 @@ plt.show()
 # load best model
 # model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
 model = net.SimpleView(n_classes = n_class, n_views = n_view)
-model.load_state_dict(torch.load("model_"))
+model.load_state_dict(torch.load("model_202305161200_52"))
 
 # get the device
 device = (
@@ -356,7 +356,7 @@ print('f1: %.3f' % final_f1)
 # load best model
 # model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
 model = net.SimpleView(n_classes = n_class, n_views = n_view)
-model.load_state_dict(torch.load("model_"))
+model.load_state_dict(torch.load("model_202305161200_52"))
 
 # get the device
 device = (
@@ -378,13 +378,15 @@ img_trans = transforms.Compose([
 
 # prepare data for testing
 test_dataset = TrainDataset_AllChannels(path_csv_test, path_las,  img_trans = img_trans, pc_rotate = True, height_noise = 0.01, test = True)
-test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size = 1, shuffle = False, pin_memory = True)
+test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size = n_batch, shuffle = False, pin_memory = True)
 
 # create dictionary for the accumulated probabilities for each data point
-data_probs = {i: [] for i in range(len(test_dataset))}
+all_paths = test_dataset.trees_frame.iloc[:,0]
+data_probs = {path: [] for path in all_paths}
 
 # iterate over the whole dataset 50 times
 for epoch in range(50):
+    print("epoch: %d" % (epoch + 1))
     
     # iterate over validation dataloader in batches
     for i, t_data in enumerate(test_dataloader, 0):
@@ -396,19 +398,23 @@ for epoch in range(50):
         # get predictions
         t_preds = model(t_inputs, t_heights)
         t_probs = torch.nn.functional.softmax(t_preds, dim = 1)
+        t_probs = t_probs.cpu().detach().numpy()
         
         # accumulate probabilities for each data point
-        if len(data_probs[i]) == 0:
-            data_probs[i] = t_probs
-        else:
-            data_probs[i] += t_probs
+        for i, path in enumerate(t_paths):
+            if data_probs[path] == []:
+                data_probs[path] = t_probs[i,:]
+            else:
+                data_probs[path] += t_probs[i,:]
 
 # get class id with maximum accumulated probabilities
-max_prob_class = {i: probs.index(max(probs)) for i, probs in data_probs.items()}
+max_prob_class = {}
+for key, array in data_probs.items():
+    max_prob_class[key] = np.argmax(array)
 
 # create dataframe
 df = pd.DataFrame({
-    "filename": test_dataset.trees_frame.iloc[:,0],
+    "filename": max_prob_class.keys(),
     "species_id": max_prob_class.values()})
 
 # load lookup table
