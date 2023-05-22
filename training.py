@@ -27,8 +27,10 @@ import parallel_densenet as net
 n_class = 33    # number of classes
 n_vali  = 400   # number of validation data points
 n_view  = 7     # number of views
-n_batch = 2**4  # batch size
+n_batch = 2**3  # batch size
 n_train = 2**13 # training dataset size
+res = 256       # image ressolution
+n_sides = n_view - 3      # number of sideviews
 
 # set paths
 path_csv_train = r"C:\TLS\down\train_labels.csv"
@@ -39,6 +41,13 @@ path_las       = r"C:\TLS\down"
 train_metadata = pd.read_csv(path_csv_train)
 train_height_mean = np.mean(train_metadata["tree_H"])
 train_height_sd = np.std(train_metadata["tree_H"])
+
+# add more threads
+os.environ["OMP_NUM_THREADS"] = "40" # export OMP_NUM_THREADS=4
+os.environ["OPENBLAS_NUM_THREADS"] = "40" # export OPENBLAS_NUM_THREADS=4 
+os.environ["MKL_NUM_THREADS"] = "40" # export MKL_NUM_THREADS=6
+os.environ["VECLIB_MAXIMUM_THREADS"] = "40" # export VECLIB_MAXIMUM_THREADS=4
+os.environ["NUMEXPR_NUM_THREADS"] = "40" # export NUMEXPR_NUM_THREADS=6
 
 #%% setup new dataset class
 
@@ -87,9 +96,9 @@ class TrainDataset_AllChannels():
         
         # get side views
         if self.pc_rotate:
-            image = sv.points_to_images(au.augment(las_name), res_im = 128)
+            image = sv.points_to_images(au.augment(las_name), res_im = res, num_side = n_sides)
         else:
-            image = sv.points_to_images(rl.read_las(las_name), res_im = 128)
+            image = sv.points_to_images(rl.read_las(las_name), res_im = res, num_side = n_sides)
         image = torch.from_numpy(image)
         
         # # augment images (by channel)
@@ -239,14 +248,10 @@ for epoch in range(num_epochs):
         inputs, heights, labels = data
         inputs, heights, labels = inputs.to(device), heights.to(device), labels.to(device)
         
-        # zero the parameter gradients
-        optimizer.zero_grad()
-        
         # forward + backward + optimize
         outputs = model(inputs, heights)
         loss = criterion(outputs, labels)
         loss.backward()
-        optimizer.step()
         
         # update epoch loss
         running_epoch_loss += loss.item()
@@ -254,6 +259,14 @@ for epoch in range(num_epochs):
         # print loss every 100 batches
         running_loss += loss.item()
         if i % 100 == 99:
+            
+            # optimize
+            optimizer.step()
+            
+            # zero the parameter gradients
+            optimizer.zero_grad()
+            
+            # print current loss
             print('[epoch: %d, batch: %d, dataset: %.2f%%] loss: %.4f' %
                   (epoch + 1, i + 1, i / len(dataloader) * 100, running_loss / 100))
             running_loss = 0.0
@@ -270,17 +283,18 @@ for epoch in range(num_epochs):
     running_v_loss = 0
     accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = int(n_class)).to(device)
     model.eval()
-    for j, v_data in enumerate(vali_dataloader, 0):
-        v_inputs, v_heights, v_labels = next(iter(vali_dataloader))
-        v_inputs, v_heights, v_labels = v_inputs.to(device), v_heights.to(device), v_labels.to(device)
-        v_outputs = model(v_inputs, v_heights)
-        v_loss = criterion(v_outputs, v_labels)
-        running_v_loss += v_loss.item()
-        accuracy.update(v_outputs, v_labels)
-        del v_inputs, v_heights, v_labels
-        torch.cuda.empty_cache()
-    avg_v_loss = running_v_loss / len(vali_dataloader)
-    final_accuracy = accuracy.compute()
+    with torch.no_grad():
+        for j, v_data in enumerate(vali_dataloader, 0):
+            v_inputs, v_heights, v_labels = v_data
+            v_inputs, v_heights, v_labels = v_inputs.to(device), v_heights.to(device), v_labels.to(device)
+            v_outputs = model(v_inputs, v_heights)
+            v_loss = criterion(v_outputs, v_labels)
+            running_v_loss += v_loss.item()
+            accuracy.update(v_outputs, v_labels)
+            del v_inputs, v_heights, v_labels
+            torch.cuda.empty_cache()
+        avg_v_loss = running_v_loss / len(vali_dataloader)
+        final_accuracy = accuracy.compute()
     model.train()
     print('[epoch: %d, validation] loss: %.4f, accuracy: %.4f' %
           (epoch + 1, avg_v_loss, final_accuracy))
@@ -317,12 +331,18 @@ plt.ylabel("Loss")
 plt.legend()
 plt.show()
 
+# Create a DataFrame from the dictionary
+df = pd.DataFrame({'Loss': ls_loss, 'Validation Loss': ls_v_loss})
+
+# Save the DataFrame to a CSV file
+df.to_csv('loss_' + timestamp + '.csv', index=False)
+
 #%% validating cnn
 
 # load best model
 # model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
 model = net.SimpleView(n_classes = n_class, n_views = n_view)
-model.load_state_dict(torch.load("model_202305120750_42"))
+model.load_state_dict(torch.load("model_202305171452_60"))
 
 # get the device
 device = (
@@ -340,7 +360,9 @@ model.eval()
 
 # prepare data for validation
 vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las, pc_rotate = False, height_noise = 0)
-vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_batch, shuffle = False, pin_memory = True)
+vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = int(n_batch / 2), shuffle = False, pin_memory = True)
+
+#%%
 
 # create metrics
 accuracy = torchmetrics.Accuracy(task = "multiclass", num_classes = int(n_class)).to(device)
@@ -348,7 +370,7 @@ f1 = torchmetrics.F1Score(task = "multiclass", num_classes = int(n_class)).to(de
 
 # iterate over validation dataloader in batches
 for i, v_data in enumerate(vali_dataloader, 0):
-    v_inputs, v_heights, v_labels = next(iter(vali_dataloader))
+    v_inputs, v_heights, v_labels = v_data #next(iter(vali_dataloader))
     v_inputs, v_heights, v_labels = v_inputs.to(device), v_heights.to(device), v_labels.to(device)
     
     # get predictions

@@ -86,7 +86,7 @@ class SimpleView(nn.Module):
         
         # change first layer to greyscale
         tops.features[0].in_channels = 1
-        tops.features[0].weight = torch.nn.Parameter(sides.features[0].weight.sum(dim = 1, keepdim = True))
+        tops.features[0].weight = torch.nn.Parameter(tops.features[0].weight.sum(dim = 1, keepdim = True))
         
         # remove effect of classifier
         tops.classifier = nn.Identity()
