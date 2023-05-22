@@ -27,8 +27,13 @@ validation_len = 400
 labels = pd.read_csv(path_csv)
 
 # encode species & data type as numbers
-le = LabelEncoder(); labels["species_id"] = le.fit_transform(labels["species"])
 le = LabelEncoder(); labels["data_type_id"] = le.fit_transform(labels["data_type"])
+le = LabelEncoder(); labels["species_id"] = le.fit_transform(labels["species"])
+
+# create species lookup table
+lookup_table = pd.DataFrame({"species": labels["species"], "species_id": labels["species_id"]})
+lookup_table = lookup_table.drop_duplicates().sort_values('species_id')
+lookup_table.to_csv(os.path.join(path_out, "lookup.csv"), index = False)
 
 # check if files exist
 exists = [os.path.exists(path_las + filename) for filename in labels["filename"]]
