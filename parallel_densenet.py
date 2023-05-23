@@ -71,27 +71,26 @@ class SimpleView(nn.Module):
     def __init__(self, n_classes: int, n_views: int):
         super().__init__()
         
-        # load model for horizontal views
-        horizontal = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
+        # load model for sides views
+        sides = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
         
         # change first layer to greyscale
-        horizontal.features[0].in_channels = 1
-        horizontal.features[0].weight = torch.nn.Parameter(horizontal.features[0].weight.sum(dim = 1, keepdim = True))
+        sides.features[0].in_channels = 1
+        sides.features[0].weight = torch.nn.Parameter(sides.features[0].weight.sum(dim = 1, keepdim = True))
         
         # remove effect of classifier
-        z_dim = horizontal.classifier.in_features
-        horizontal.classifier = nn.Identity()
+        z_dim = sides.classifier.in_features
+        sides.classifier = nn.Identity()
         
-        # load model for vertical views
-        vertical = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
+        # load model for tops views
+        tops = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
         
         # change first layer to greyscale
-
-        vertical.features[0].in_channels = 1
-        vertical.features[0].weight = torch.nn.Parameter(vertical.features[0].weight.sum(dim = 1, keepdim = True))
+        tops.features[0].in_channels = 1
+        tops.features[0].weight = torch.nn.Parameter(tops.features[0].weight.sum(dim = 1, keepdim = True))
         
         # remove effect of classifier
-        vertical.classifier = nn.Identity()
+        tops.classifier = nn.Identity()
         
         # load model for details
         details = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
@@ -104,8 +103,8 @@ class SimpleView(nn.Module):
         details.classifier = nn.Identity()
         
         # add new classifier & float pathway
-        self.horizontal_pathway = horizontal
-        self.vertical_pathway = vertical
+        self.sides_pathway = sides
+        self.tops_pathway = tops
         self.details_pathway = details
         self.height_pathway = nn.Sequential(
             nn.Linear(1, 128),
@@ -121,18 +120,18 @@ class SimpleView(nn.Module):
         
         # prepare data
         b, v, c, h, w = inputs.shape
-        horizontal = inputs[:,1:-2,:,:,:].reshape(b * (v - 3), c, h, w)
-        vertical = inputs[:,[0,-2],:,:,:].reshape(b * 2, c, h, w)
+        sides = inputs[:,1:-2,:,:,:].reshape(b * (v - 3), c, h, w)
+        tops = inputs[:,[0,-2],:,:,:].reshape(b * 2, c, h, w)
         details = inputs[:,-1,:,:,:].reshape(b * 1, c, h, w)
         del inputs
         
-        # process horizontal views
-        horizontal = self.horizontal_pathway(horizontal)
-        horizontal = horizontal.reshape(b, (v - 3), -1).reshape(b, -1)
+        # process sides views
+        sides = self.sides_pathway(sides)
+        sides = sides.reshape(b, (v - 3), -1).reshape(b, -1)
         
-        # process vertical views
-        vertical = self.vertical_pathway(vertical)
-        vertical = vertical.reshape(b, 2, -1).reshape(b, -1)
+        # process tops views
+        tops = self.tops_pathway(tops)
+        tops = tops.reshape(b, 2, -1).reshape(b, -1)
         
         # process details
         details = self.details_pathway(details)
@@ -142,5 +141,5 @@ class SimpleView(nn.Module):
         heights = self.height_pathway(heights.view(-1, 1))
         
         # get label
-        label = self.classifier(torch.cat((horizontal, vertical, details, heights), dim = 1))
+        label = self.classifier(torch.cat((sides, tops, details, heights), dim = 1))
         return label

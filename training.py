@@ -378,7 +378,7 @@ print('f1: %.3f' % final_f1)
 # load best model
 # model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
 model = net.SimpleView(n_classes = n_class, n_views = n_view)
-model.load_state_dict(torch.load("model_202305161200_52"))
+model.load_state_dict(torch.load("model_202305171452_60"))
 
 # get the device
 device = (
@@ -400,7 +400,7 @@ img_trans = transforms.Compose([
 
 # prepare data for testing
 test_dataset = TrainDataset_AllChannels(path_csv_test, path_las,  img_trans = img_trans, pc_rotate = True, height_noise = 0.01, test = True)
-test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size = n_batch, shuffle = False, pin_memory = True)
+test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size = int(n_batch/2), shuffle = False, pin_memory = True)
 
 # create dictionary for the accumulated probabilities for each data point
 all_paths = test_dataset.trees_frame.iloc[:,0]
@@ -424,7 +424,7 @@ for epoch in range(50):
         
         # accumulate probabilities for each data point
         for i, path in enumerate(t_paths):
-            if not data_probs[path]:
+            if not any(data_probs[path]):
                 data_probs[path] = t_probs[i,:]
             else:
                 data_probs[path] += t_probs[i,:]
