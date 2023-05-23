@@ -1,6 +1,6 @@
 # DetailView
 Tree species classification for [3D4EcoTec](https://github.com/stefp/Tr3D_species)
-by Zoe Schindler and Julian Frey (Chair of Forest Growth and Dendroecology, University of Freiburg)
+by Zoe Schindler and Julian Frey (<a href ="https://www.iww.uni-freiburg.de/">Chair of Forest Growth and Dendroecology, University of Freiburg</a>)
 
 The project is based on pytorch. Point clouds of single trees are augmented and projected to grids 
 (4 side views, 1 top view, 1 bottom view, 1 detail view 1 - 1.5 m height). Classification is done 
@@ -11,10 +11,18 @@ After that, two more linear layers with a relu layer in between are used as clas
 The final predictions are made by adding the probabilities of 50 augmentations of each test tree 
 and selecting the most probable class.
 
-## Roadmap
-1. downsample data & remove point clouds with < 100 points --> output: las files ✓
-2. balancing the data set --> output: weights ✓
-3. read point clouds, augment point clouds, create sideviews --> output: tensors ✓
-4. setting up neural network --> output: pytorch model structure ✓
-5. setting up data pipeline --> output: pytorch data pipeline ✓
-6. training & validating neural network --> output: trained pytorch model ✓
+## Code Overview
+
+### Main Code
+
+1. <a href ="https://github.com/JulFrey/DetailView/blob/main/downsampling.py">downsample.py</a>: downsample data & remove point clouds with < 100 points
+2. <a href = "https://github.com/JulFrey/DetailView/blob/main/balancing.py">balancing.py</a>: balancing the data set
+3. <a href = "https://github.com/JulFrey/DetailView/blob/main/parallel_densenet.py">parallel_densenet.py</a>: setting up neural network
+4. <a href = "https://github.com/JulFrey/DetailView/blob/main/training.py">training.py</a>: training, validating, testing
+
+### Utilities
+
+* <a href = "https://github.com/JulFrey/DetailView/blob/main/augmentation.py">augmentation.py</a>: augment point clouds
+* <a href = "https://github.com/JulFrey/DetailView/blob/main/read_las.py">read_las.py.py</a>: read las files to numpy arrays
+* <a href = "https://github.com/JulFrey/DetailView/blob/main/sideview.py">sideview.py</a>: create sideviews of point clouds
+
