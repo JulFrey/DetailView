@@ -23,6 +23,6 @@ and selecting the most probable class.
 ### Utilities
 
 * <a href = "https://github.com/JulFrey/DetailView/blob/main/augmentation.py">augmentation.py</a>: augment point clouds
-* <a href = "https://github.com/JulFrey/DetailView/blob/main/read_las.py">read_las.py.py</a>: read las files to numpy arrays
+* <a href = "https://github.com/JulFrey/DetailView/blob/main/read_las.py">read_las.py</a>: read las files to numpy arrays
 * <a href = "https://github.com/JulFrey/DetailView/blob/main/sideview.py">sideview.py</a>: create sideviews of point clouds
 
