@@ -9,64 +9,16 @@ Created on Fri May  5 15:43:42 2023
 import torch
 import torchvision
 import torch.nn as nn
+import pandas as pd
+import os
+import numpy as np
 
-class ParallelDenseNet(nn.Module):
-    def __init__(self, n_classes: int, n_views: int):
-        super(ParallelDenseNet, self).__init__()
-        
-        # define a single DenseNet
-        self.shared_densenet = torchvision.models.densenet201(weights = "DenseNet201_Weights.DEFAULT")
-        self.shared_densenet.features[0].in_channels = 1
-        self.shared_densenet.features[0].weight = nn.Parameter(self.shared_densenet.features[0].weight.sum(dim = 1, keepdim = True))
-        
-        # remove effect of classifier
-        z_dim = self.shared_densenet.classifier.in_features
-        self.shared_densenet.classifier = nn.Identity()
-        
-        # define flattener
-        self.flatten = nn.Flatten()
-        
-        # define float pathway
-        self.float_pathway = nn.Sequential(
-            nn.Linear(1, 64),
-            nn.ReLU(),
-            nn.Linear(64, z_dim))
-        
-        # create new classifier
-        self.classifier = nn.Sequential(
-            nn.Linear(in_features = z_dim * (n_views + 1), out_features = 256),
-            nn.ReLU(),
-            nn.Linear(in_features = 256, out_features = n_classes))
+# import own scripts
+import augmentation as au
+import sideview as sv
+import read_las as rl
 
-    def forward(self, inputs: torch.Tensor, heights: torch.Tensor) -> torch.Tensor:
-        
-        # pass each input tensor through the shared DenseNet
-        img1 = self.shared_densenet(inputs[:,0,:,:,:])
-        img2 = self.shared_densenet(inputs[:,1,:,:,:])
-        img3 = self.shared_densenet(inputs[:,2,:,:,:])
-        img4 = self.shared_densenet(inputs[:,3,:,:,:])
-        img5 = self.shared_densenet(inputs[:,4,:,:,:])
-        img6 = self.shared_densenet(inputs[:,5,:,:,:])
-        img7 = self.shared_densenet(inputs[:,6,:,:,:])
-        del inputs
-        
-        # concatenate output tensors from all branches
-        img = torch.cat((img1, img2, img3, img4, img5, img6, img7), dim = 1)
-        img = self.flatten(img)
-        
-        # using height float
-        heights = self.float_pathway(heights.view(-1, 1))
-
-        # concatenate float input to flattened tensor
-        img = torch.cat((img, heights), dim = 1)
-
-        # pass the concatenated tensor through fully connected layers
-        label = self.classifier(img)
-        
-        # return predicted label
-        return label
-
-# # https://github.com/isaaccorley/simpleview-pytorch/blob/main/simpleview_pytorch/simpleview.py
+# https://github.com/isaaccorley/simpleview-pytorch/blob/main/simpleview_pytorch/simpleview.py
 class SimpleView(nn.Module):
     def __init__(self, n_classes: int, n_views: int):
         super().__init__()
@@ -143,3 +95,89 @@ class SimpleView(nn.Module):
         # get label
         label = self.classifier(torch.cat((sides, tops, details, heights), dim = 1))
         return label
+
+#%% create dataset class to load the data from csv and las files
+class TrainDataset_AllChannels():
+    
+    """Tree species dataset."""
+    
+    # initialization
+    def __init__(self, csv_file, root_dir, img_trans = None, pc_rotate = True,
+                 height_noise = 0.01, height_mean = None,
+                 height_sd = None, test = False, res = 512, n_sides = 4):
+        
+        """
+        Arguments:
+            csv_file (string): Path to the csv file with annotations with the collumns
+                0: filenme, 1: label_id, 2: tree height.
+            root_dir (string): Directory with all the las files.
+            img_trans (callable, optional): Optional transform to be applied
+                on a sample.
+        """
+        
+        # set attributes
+        self.trees_frame  = pd.read_csv(csv_file)
+        self.root_dir     = root_dir
+        self.img_trans    = img_trans
+        self.pc_rotate    = pc_rotate
+        self.height_noise = height_noise
+        self.height_mean  = height_mean
+        self.height_sd    = height_sd
+        self.test         = test
+        self.res          = res
+        self.n_sides      = n_sides
+    
+    # length
+    def __len__(self):
+        return len(self.trees_frame)
+    
+    # indexing
+    def __getitem__(self, idx):
+        
+        # convert indices to list
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+        
+        # get full las path
+        las_name = os.path.join(
+            self.root_dir,
+            *self.trees_frame.iloc[idx, 0].split('/'))
+        
+        # get side views
+        if self.pc_rotate:
+            image = sv.points_to_images(au.augment(las_name), res_im = self.res, num_side = self.n_sides)
+        else:
+            image = sv.points_to_images(rl.read_las(las_name), res_im = self.res, num_side = self.n_sides)
+        image = torch.from_numpy(image)
+        
+        # augment images (all channels at once)
+        if self.img_trans:
+            image = self.img_trans(image)
+        
+        # add dimension
+        image = image.unsqueeze(1)
+        
+        # get height
+        height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype = torch.float32)
+        
+        # augment height
+        if self.height_noise > 0:
+            height += np.random.normal(0, self.height_noise)
+        
+        # scale height using training mean & sd
+        height = (height - self.height_mean) / self.height_sd
+        
+        # return images with filenames
+        if self.test:
+            las_path = self.trees_frame.iloc[idx, 0]
+            return image, height, las_path
+        
+        # return images with labels
+        label = torch.tensor(self.trees_frame.iloc[idx, 1], dtype = torch.int64)
+        return image, height, label
+    
+    # training weights
+    def weights(self):
+        return torch.tensor(self.trees_frame["weight"].values)
+
+

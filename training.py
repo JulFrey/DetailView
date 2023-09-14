@@ -16,17 +16,14 @@ import matplotlib.pyplot as plt
 from torchvision import transforms
 
 # import own scripts
-import augmentation as au
-import sideview as sv
-import read_las as rl
 import parallel_densenet as net
 
 # set parameters
 n_class = 33    # number of classes
 n_view  = 7     # number of views
-n_batch = 2**3  # batch size
+n_batch = 2**1  # batch size
 n_train = 2**13 # training dataset size
-res = 256       # image ressolution
+res = 512       # image ressolution
 n_sides = n_view - 3      # number of sideviews
 
 # set paths
@@ -48,120 +45,6 @@ os.environ["MKL_NUM_THREADS"] = "40" # export MKL_NUM_THREADS=6
 os.environ["VECLIB_MAXIMUM_THREADS"] = "40" # export VECLIB_MAXIMUM_THREADS=4
 os.environ["NUMEXPR_NUM_THREADS"] = "40" # export NUMEXPR_NUM_THREADS=6
 
-#%% setup new dataset class
-
-# create dataset class to load the data from csv and las files
-class TrainDataset_AllChannels():
-    
-    """Tree species dataset."""
-    
-    # initialization
-    def __init__(self, csv_file, root_dir, img_trans = None, pc_rotate = True,
-                 height_noise = 0.01, height_mean = train_height_mean,
-                 height_sd = train_height_sd, test = False):
-        
-        """
-        Arguments:
-            csv_file (string): Path to the csv file with annotations with the collumns
-                0: filenme, 1: label_id, 2: tree height.
-            root_dir (string): Directory with all the las files.
-            img_trans (callable, optional): Optional transform to be applied
-                on a sample.
-        """
-        
-        # set attributes
-        self.trees_frame  = pd.read_csv(csv_file)
-        self.root_dir     = root_dir
-        self.img_trans    = img_trans
-        self.pc_rotate    = pc_rotate
-        self.height_noise = height_noise
-        self.height_mean  = height_mean
-        self.height_sd    = height_sd
-        self.test         = test
-    
-    # length
-    def __len__(self):
-        return len(self.trees_frame)
-    
-    # indexing
-    def __getitem__(self, idx):
-        
-        # convert indices to list
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
-        
-        # get full las path
-        las_name = os.path.join(
-            self.root_dir,
-            *self.trees_frame.iloc[idx, 0].split('/'))
-        
-        # get side views
-        if self.pc_rotate:
-            image = sv.points_to_images(au.augment(las_name), res_im = res, num_side = n_sides)
-        else:
-            image = sv.points_to_images(rl.read_las(las_name), res_im = res, num_side = n_sides)
-        image = torch.from_numpy(image)
-        
-        # augment images (all channels at once)
-        if self.img_trans:
-            image = self.img_trans(image)
-        
-        # add dimension
-        image = image.unsqueeze(1)
-        
-        # get height
-        height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype = torch.float32)
-        
-        # augment height
-        if self.height_noise > 0:
-            height += np.random.normal(0, self.height_noise)
-        
-        # scale height using training mean & sd
-        height = (height - self.height_mean) / self.height_sd
-        
-        # return images with filenames
-        if self.test:
-            las_path = self.trees_frame.iloc[idx, 0]
-            return image, height, las_path
-        
-        # return images with labels
-        label = torch.tensor(self.trees_frame.iloc[idx, 1], dtype = torch.int64)
-        return image, height, label
-    
-    # training weights
-    def weights(self):
-        return torch.tensor(self.trees_frame["weight"].values)
-        
-#%% test dataset & dataloader
-
-# # setting up image augmentation
-# img_trans = transforms.Compose([
-#     transforms.RandomVerticalFlip(0.5),
-#     transforms.RandomAffine(
-#         degrees = 0, translate = (0.1, 0.1), scale = (0.9, 1.1))])
-
-# # create dataset object
-# dataset = TrainDataset_AllChannels(path_csv_train, path_las) # without
-# dataset = TrainDataset_AllChannels(path_csv_train, path_las, img_trans = img_trans) # with
-
-# # # show image
-# # plt.imshow(dataset[0][0][0,0,:,:], interpolation = 'nearest')
-# # plt.show()
-
-# # define a sampler
-# sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), n_train, replacement = True)
-
-# # create data loader
-# batch_size = 2**0
-# dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, sampler = sampler, pin_memory = True)
-
-# # # test output of iterator
-# # image, height, label = next(iter(dataloader))
-# # print(image.shape); print(height.shape); print(label.shape)
-
-# # # show image
-# # plt.imshow(image[0,2,0,:,:], interpolation = 'nearest')
-# # plt.show()
 
 #%% prepare simple view
 
@@ -170,7 +53,7 @@ img_trans = transforms.Compose([
     transforms.RandomVerticalFlip(0.5)])
 
 # prepare data
-dataset = TrainDataset_AllChannels(path_csv_train, path_las, img_trans = img_trans, height_noise = 0.01)
+dataset = net.TrainDataset_AllChannels(path_csv_train, path_las, img_trans = img_trans, height_noise = 0.01, res = res, n_sides = n_sides, height_mean = train_height_mean, height_sd = train_height_sd)
 
 # define a sampler
 sampler = torch.utils.data.sampler.WeightedRandomSampler(dataset.weights(), n_train, replacement = True)
@@ -206,7 +89,7 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode = 'min', 
 #%% training loop
 
 # prepare validation data for checking
-vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las, pc_rotate = False, height_noise = 0)
+vali_dataset = net.TrainDataset_AllChannels(path_csv_vali, path_las, pc_rotate = False, height_noise = 0, res = res, n_sides = n_sides, height_mean = train_height_mean, height_sd = train_height_sd)
 vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = n_batch, shuffle = False, pin_memory = True)
 
 # prepare training
@@ -241,7 +124,7 @@ for epoch in range(num_epochs):
         
         # print loss every 100 batches
         running_loss += loss.item()
-        if i % 100 == 99:
+        if i % 400 == 399:
             
             # optimize
             optimizer.step()
@@ -251,7 +134,7 @@ for epoch in range(num_epochs):
             
             # print current loss
             print('[epoch: %d, batch: %d, dataset: %.2f%%] loss: %.4f' %
-                  (epoch + 1, i + 1, i / len(dataloader) * 100, running_loss / 100))
+                  (epoch + 1, i + 1, i / len(dataloader) * 100, running_loss / 400))
             running_loss = 0.0
         
         # clear memory
@@ -327,6 +210,7 @@ df.to_csv('loss_' + timestamp + '.csv', index=False)
 # load best model
 # model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
 model = net.SimpleView(n_classes = n_class, n_views = n_view)
+# To-Do load best model dynamically 
 model.load_state_dict(torch.load("model_202305171452_60"))
 
 # get the device
@@ -344,7 +228,7 @@ model.to(device)
 model.eval()
 
 # prepare data for validation
-vali_dataset = TrainDataset_AllChannels(path_csv_vali, path_las, pc_rotate = False, height_noise = 0)
+vali_dataset = net.TrainDataset_AllChannels(path_csv_vali, path_las, pc_rotate = False, height_noise = 0, res = res, n_sides = n_sides, height_mean = train_height_mean, height_sd = train_height_sd)
 vali_dataloader = torch.utils.data.DataLoader(vali_dataset, batch_size = int(n_batch / 2), shuffle = False, pin_memory = True)
 
 #%%
@@ -373,76 +257,3 @@ final_f1 = f1.compute()
 print('accuracy: %.3f' % final_accuracy)
 print('f1: %.3f' % final_f1)
 
-#%% make predictions
-
-# load best model
-# model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
-model = net.SimpleView(n_classes = n_class, n_views = n_view)
-model.load_state_dict(torch.load("model_202305171452_60"))
-
-# get the device
-device = (
-    "cuda"
-    if torch.cuda.is_available()
-    else "mps"
-    if torch.backends.mps.is_available()
-    else "cpu")
-
-# give to device
-model.to(device)
-
-# turn on evaluation mode
-model.eval()
-
-# setting up image augmentation
-img_trans = transforms.Compose([
-    transforms.RandomVerticalFlip(0.5)])
-
-# prepare data for testing
-test_dataset = TrainDataset_AllChannels(path_csv_test, path_las,  img_trans = img_trans, pc_rotate = True, height_noise = 0.01, test = True)
-test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size = int(n_batch/2), shuffle = False, pin_memory = True)
-
-# create dictionary for the accumulated probabilities for each data point
-all_paths = test_dataset.trees_frame.iloc[:,0]
-data_probs = {path: [] for path in all_paths}
-
-# iterate over the whole dataset 50 times
-for epoch in range(50):
-    print("epoch: %d" % (epoch + 1))
-    
-    # iterate over validation dataloader in batches
-    for i, t_data in enumerate(test_dataloader, 0):
-        
-        # load the batch
-        t_inputs, t_heights, t_paths = t_data
-        t_inputs, t_heights = t_inputs.to(device), t_heights.to(device)
-        
-        # get predictions
-        t_preds = model(t_inputs, t_heights)
-        t_probs = torch.nn.functional.softmax(t_preds, dim = 1)
-        t_probs = t_probs.cpu().detach().numpy()
-        
-        # accumulate probabilities for each data point
-        for i, path in enumerate(t_paths):
-            if not any(data_probs[path]):
-                data_probs[path] = t_probs[i,:]
-            else:
-                data_probs[path] += t_probs[i,:]
-
-# get class id with maximum accumulated probabilities
-max_prob_class = {}
-for key, array in data_probs.items():
-    max_prob_class[key] = np.argmax(array)
-
-# create dataframe
-df = pd.DataFrame({
-    "filename": max_prob_class.keys(),
-    "species_id": max_prob_class.values()})
-
-# add species name
-lookup = pd.read_csv(path_csv_lookup)
-joined = pd.merge(df, lookup, on = 'species_id')
-# joined = joined.drop("species_id", axis = 1)
-
-# save data frame
-joined.to_csv("test_predictions.csv", index = False)
