@@ -20,7 +20,7 @@ n_class = 33    # number of classes
 n_view  = 7     # number of views
 n_batch = 2**1  # batch size
 n_train = 2**13 # training dataset size
-res = 512       # image ressolution
+res = 256       # image ressolution
 n_sides = n_view - 3      # number of sideviews
 
 # set paths
