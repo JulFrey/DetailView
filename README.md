@@ -17,8 +17,9 @@ and selecting the most probable class.
 
 1. <a href ="https://github.com/JulFrey/DetailView/blob/main/downsampling.py">downsample.py</a>: downsample data & remove point clouds with < 100 points
 2. <a href = "https://github.com/JulFrey/DetailView/blob/main/balancing.py">balancing.py</a>: balancing the data set
-3. <a href = "https://github.com/JulFrey/DetailView/blob/main/parallel_densenet.py">parallel_densenet.py</a>: setting up neural network
-4. <a href = "https://github.com/JulFrey/DetailView/blob/main/training.py">training.py</a>: training, validating, testing
+3. <a href = "https://github.com/JulFrey/DetailView/blob/main/parallel_densenet.py">parallel_densenet.py</a>: setting up neural network & data loader
+4. <a href = "https://github.com/JulFrey/DetailView/blob/main/training.py">training.py</a>: training & validating
+5. <a href = "https://github.com/JulFrey/DetailView/blob/main/predict.py">predict.py</a>: predicting to test data
 
 ### Utilities
 
