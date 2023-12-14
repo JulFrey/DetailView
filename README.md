@@ -27,3 +27,7 @@ and selecting the most probable class.
 * <a href = "https://github.com/JulFrey/DetailView/blob/main/read_las.py">read_las.py</a>: read las files to numpy arrays
 * <a href = "https://github.com/JulFrey/DetailView/blob/main/sideview.py">sideview.py</a>: create sideviews of point clouds
 
+### Results
+
+* <a href = "https://github.com/JulFrey/DetailView/blob/main/loss_202305171452.csv">loss_202305171452.csv</a>: history of the loss & validation loss
+* <a href = "https://github.com/JulFrey/DetailView/blob/main/test_predictions.csv">test_predictions.csv</a>: predicted labels for the test data
