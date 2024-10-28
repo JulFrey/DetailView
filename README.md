@@ -6,6 +6,8 @@ The project is based on pytorch. Point clouds of single trees are augmented and 
 (4 side views, 1 top view, 1 bottom view, 1 detail view 1 - 1.5 m height).  
 The dataset is available on [<a href = "https://zenodo.org/records/13255198?utm_source=substack&utm_medium=email"> Zenodo</a>](https://zenodo.org/records/13255198). 
 
+The training weights are available on [<a href = "https://doi.org/10.60493/xw42t-6mt03"> FreiData</a>](https://doi.org/10.60493/xw42t-6mt03).
+
 Classification is done with three densenet201 instances, one for the side views, one for the top and bottom views and the 
 last one for the detail view. These classifications are merged and the tree height is also added. 
 After that, two more linear layers with a relu layer in between are used as classifiers. 
