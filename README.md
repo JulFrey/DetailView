@@ -1,6 +1,6 @@
 # DetailView
 Tree species classification for [3D4EcoTec](https://github.com/stefp/Tr3D_species)
-by Zoe Schindler and Julian Frey (<a href ="https://www.iww.uni-freiburg.de/">Chair of Forest Growth and Dendroecology, University of Freiburg</a>)
+by [Zoe Schindler](https://freidok.uni-freiburg.de/pers/307357) and [Julian Frey](https://freidok.uni-freiburg.de/pers/24353) (<a href ="https://www.iww.uni-freiburg.de/">Chair of Forest Growth and Dendroecology, University of Freiburg</a>)
 
 The project is based on pytorch. Point clouds of single trees are augmented and projected to grids 
 (4 side views, 1 top view, 1 bottom view, 1 detail view 1 - 1.5 m height).  
