@@ -28,6 +28,7 @@ Puliti, S., Lines, E., Müllerová, J., Frey, J., Schindler, Z., Straker, A., Al
 3. <a href = "https://github.com/JulFrey/DetailView/blob/main/parallel_densenet.py">parallel_densenet.py</a>: setting up neural network & data loader
 4. <a href = "https://github.com/JulFrey/DetailView/blob/main/training.py">training.py</a>: training & validating
 5. <a href = "https://github.com/JulFrey/DetailView/blob/main/predict.py">predict.py</a>: predicting to test data
+   The model weights trained in the FOR-species20K paper can be downloaded [here](https://freidata.uni-freiburg.de/records/xw42t-6mt03).
 
 ### Utilities
 
