@@ -19,6 +19,8 @@ Any scientific publication using the data should cite the following paper:
 
 Puliti, S., Lines, E., Müllerová, J., Frey, J., Schindler, Z., Straker, A., Allen, M.J., Winiwarter, L., Rehush, N., Hristova, H., Murray, B., Calders, K., Terryn, L., Coops, N., Höfle, B., Krůček, M., Krokm, G., Král, K., Luck, L., Levick, S.R., Missarov, A., Mokroš, M., Owen, H., Stereńczak, K., Pitkänen, T.P., Puletti, N., Saarinen, N., Hopkinson, C., Torresan, C., Tomelleri, E., Weiser, H., Junttila, S., and Astrup, R. (2024) Benchmarking tree species classification from proximally-sensed laser scanning data: introducing the FOR-species20K dataset. ArXiv; [available here](https://www.arxiv.org/abs/2408.06507)
 
+The development of the model was was funded by the Deutsche Forschungsgemeinschaft (DFG, German Research Foundation) – Project FR 4404/1-1, “Making the direct link between light regime and forest biodiversity – a 3D spatially explicit modelling approach based on TLS, CNNs and ray tracing”.
+
 ## Code Overview
 
 ### Main Code
