@@ -2,6 +2,12 @@
 Tree species classification for [3D4EcoTec](https://github.com/stefp/Tr3D_species)
 by [Zoe Schindler](https://freidok.uni-freiburg.de/pers/307357) and [Julian Frey](https://freidok.uni-freiburg.de/pers/24353) (<a href ="https://www.iww.uni-freiburg.de/">Chair of Forest Growth and Dendroecology, University of Freiburg</a>)
 
+
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14204431.svg)](https://doi.org/10.5281/zenodo.14204431)
+
+
+
 The project is based on pytorch. Point clouds of single trees are augmented and projected to grids 
 (4 side views, 1 top view, 1 bottom view, 1 detail view 1 - 1.5 m height).  
 The dataset is available on [<a href = "https://zenodo.org/records/13255198?utm_source=substack&utm_medium=email"> Zenodo</a>](https://zenodo.org/records/13255198). 
