@@ -22,13 +22,14 @@ n_batch = 2**1  # batch size
 n_train = 2**13 # training dataset size
 res = 256       # image ressolution
 n_sides = n_view - 3      # number of sideviews
+n_aug = 10 # number of augmentations per tree
 
 # set paths
 path_csv_lookup = r"C:\TLS\down\lookup.csv"
 path_csv_train  = r"C:\TLS\down\train_labels.csv"
 path_csv_vali   = r"C:\TLS\down\vali_labels.csv"
-path_csv_test   = r"C:\TLS\down\test_labels.csv"
-path_las        = r"C:\TLS\down"
+path_csv_test   = r"E:\Mathisle\2024-11-07 MATHISLEWALD.RiSCAN\EXPORTS\Point cloudslabels.csv"
+path_las        = r"E:\Mathisle\2024-11-07 MATHISLEWALD.RiSCAN\EXPORTS\Point clouds\single_trees"
 
 # get mean & sd of height from training data
 train_metadata = pd.read_csv(path_csv_train)
@@ -48,7 +49,7 @@ os.environ["NUMEXPR_NUM_THREADS"] = "40" # export NUMEXPR_NUM_THREADS=6
 # load best model
 # model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
 model = net.SimpleView(n_classes = n_class, n_views = n_view)
-model.load_state_dict(torch.load("model_202305171452_60"))
+model.load_state_dict(torch.load("model_ft_202412171652_3"))
 
 # get the device
 device = (
@@ -77,7 +78,7 @@ all_paths = test_dataset.trees_frame.iloc[:,0]
 data_probs = {path: [] for path in all_paths}
 
 # iterate over the whole dataset 50 times
-for epoch in range(50):
+for epoch in range(n_aug):
     print("epoch: %d" % (epoch + 1))
     
     # iterate over validation dataloader in batches
@@ -114,5 +115,11 @@ lookup = pd.read_csv(path_csv_lookup)
 joined = pd.merge(df, lookup, on = 'species_id')
 # joined = joined.drop("species_id", axis = 1)
 
+# create a df with the probabilities
+data_probs_df = pd.DataFrame.from_dict(data_probs, orient='index').reset_index()
+col_labels = lookup['species']
+data_probs_df.columns = pd.concat([pd.Series(["File"]), col_labels])
+
 # save data frame
-joined.to_csv("test_predictions.csv", index = False)
+joined.to_csv(r"E:\Mathisle\2024-11-07 MATHISLEWALD.RiSCAN\EXPORTS\Point clouds\species_predictions_2021_eu.csv", index = False)
+data_probs_df.to_csv(r"E:\Mathisle\2024-11-07 MATHISLEWALD.RiSCAN\EXPORTS\Point clouds\species_probabilities_eu.csv", index = False)
