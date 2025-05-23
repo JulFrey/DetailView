@@ -48,3 +48,24 @@ The development of the model was funded by the Deutsche Forschungsgemeinschaft (
 
 * <a href = "https://github.com/JulFrey/DetailView/blob/main/loss_202305171452.csv">loss_202305171452.csv</a>: history of the loss & validation loss
 * <a href = "https://github.com/JulFrey/DetailView/blob/main/test_predictions.csv">test_predictions.csv</a>: predicted labels for the test data
+
+### How to use the model to perform predictions
+
+Setup the python environment with the required packages.
+```bash 
+conda create -n detailview python=3.12
+conda activate detailview
+pip3 install numpy pandas scikit-learn laspy matplotlib requests
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+```
+Download the model weights from [FreiData](https://doi.org/10.60493/xw42t-6mt03) and place them in the folder "weights" in the root directory of the project.
+```bash 
+mkdir weights
+wget https://freidata.uni-freiburg.de/records/xw42t-6mt03/files/model_202305171452_60?download=1
+mv model_202305171452_60 weights/model_202305171452_60
+```
+
+Prepare your data in the same format as the training data. The data should be in a folder called "data" in the root directory of the project. The data should be in .las format and every tree should be in a separate file. 
+Additionally you need a csv file called "test.csv" in the root directory of the project. The csv file should have the following columns: filename, species, tree_H. The species collumn can have any integer val and is just to have the same shape as teh training data.
+
+

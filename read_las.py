@@ -6,14 +6,14 @@ Created on Mon Apr 24 10:14:32 2023
 """
 
 # import packages
-import pdal
+import laspy #pdal
 import numpy as np
 
 #%%
 
 def read_las(path_las):
-    
-    """ 
+
+    """
     Parameters
     ----------
     path_las : str
@@ -24,11 +24,13 @@ def read_las(path_las):
     data : np.array
         XYZ point coordinates in np.array.
     """
-    
+
     # read in data
-    pipeline = pdal.Pipeline([pdal.Reader(path_las, type = "readers.las")])
-    pipeline.execute()
-    
+    #pipeline = pdal.Pipeline([pdal.Reader(path_las, type = "readers.las")])
+    #pipeline.execute()
+
     # return numpy array
-    data = pipeline.arrays[0]
-    return np.column_stack((data['X'], data['Y'], data['Z']))
+    #data = pipeline.arrays[0]
+    data = laspy.read(path_las)
+    return np.column_stack((data.X, data.Y, data.Z))
+
