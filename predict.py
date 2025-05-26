@@ -29,8 +29,8 @@ n_aug = 10 # number of augmentations per tree
 # set paths
 path_csv_lookup = r".\lookup.csv"
 path_csv_train  = r".\train_labels.csv"
-path_csv_vali   = r".\vali_labels.csv"
-path_csv_test   = r".\test_labels.csv"
+# path_csv_vali   = r".\vali_labels.csv"
+path_csv_test   = r".\test_labels_es.csv"
 path_las        = r".\test_las"
 model           = r".\model_ft_202412171652_3" # path to the model weights
 outfile         = r".\predictions.csv" # path to the output file
