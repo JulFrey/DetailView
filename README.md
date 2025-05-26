@@ -58,14 +58,6 @@ conda activate detailview
 pip3 install numpy pandas scikit-learn laspy matplotlib requests
 pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 ```
-Download the model weights from [FreiData](https://doi.org/10.60493/xw42t-6mt03) and place them in the folder "weights" in the root directory of the project.
-```bash 
-mkdir weights
-wget https://freidata.uni-freiburg.de/records/xw42t-6mt03/files/model_202305171452_60?download=1
-mv model_202305171452_60 weights/model_202305171452_60
-```
-
-Prepare your data in the same format as the training data. The data should be in a folder called "data" in the root directory of the project. The data should be in .las format and every tree should be in a separate file. 
-Additionally you need a csv file called "test.csv" in the root directory of the project. The csv file should have the following columns: filename, species, tree_H. The species collumn can have any integer val and is just to have the same shape as teh training data.
+You will need a single las/laz file with a coloumn with single tree labels (e.g. TreeID, can be specified with the argument tree_id_col) or one file for every tree and a csv file with the columns filename, species_id, tree_H. filename gives the ralative path to the path_las argument, species_id can be blank or -999, tree_H is the height of the tree in meters.
 
 

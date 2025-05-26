@@ -8,15 +8,15 @@ Created on Tue Apr 18 08:55:35 2023
 # import packages
 import read_las as rl
 import numpy as np
+import laspy
 
-def augment(path_las, rotate_h_max = 22.5, rotate_v_max = 180,
-            sampling_max = 0.1):
+def augment(las_input, rotate_h_max=22.5, rotate_v_max=180, sampling_max=0.1, tree_id_col='TreeID', tree_id=None):
     
     """
     Parameters
     ----------
-    path_las : str
-        Path to the input las file.
+    las_input : str or laspy.LasData
+        Path to a las file or a laspy.LasData object containing the point cloud data.
     rotate_h_max : float, optional
         Maximum random rotation along the horizontal axes in degree. The
         default is 22.5.
@@ -25,15 +25,29 @@ def augment(path_las, rotate_h_max = 22.5, rotate_v_max = 180,
         is 180.
     sampling_max : float, optional
         Maximum downsampling as a fraction. The default is 0.1.
+    tree_id_col : str, optional
+        The column name in the las file that contains the tree IDs. The default
+        is 'TreeID'.
+    tree_id : int, optional
 
     Returns
     -------
     XYZ point coordinates in np.array.
     """
-    
-    # read in las file
-    points = rl.read_las(path_las)
-    
+    ## read in las file
+    # points = rl.read_las(path_las)
+    # Read points
+    if isinstance(las_input, str):
+        points = rl.read_las(las_input)
+    elif isinstance(las_input, laspy.LasData):
+        if tree_id is None:
+            raise ValueError("TreeID must be provided when using a laspy object.")
+        mask = las_input[tree_id_col] == tree_id
+        points = np.vstack((las_input.x[mask], las_input.y[mask], las_input.z[mask])).T
+    else:
+        raise TypeError("las_input must be a file path or laspy.LasData object.")
+
+
     # sub-sampling
     s_num = int((1 - sampling_max) * points.shape[0])
     s_idx = np.random.choice(np.arange(points.shape[0]), s_num, replace = False)

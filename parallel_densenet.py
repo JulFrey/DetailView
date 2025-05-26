@@ -12,6 +12,7 @@ import torch.nn as nn
 import pandas as pd
 import os
 import numpy as np
+import laspy
 
 # import own scripts
 import augmentation as au
@@ -98,86 +99,95 @@ class SimpleView(nn.Module):
 
 #%% create dataset class to load the data from csv and las files
 class TrainDataset_AllChannels():
-    
     """Tree species dataset."""
-    
-    # initialization
-    def __init__(self, csv_file, root_dir, img_trans = None, pc_rotate = True,
-                 height_noise = 0.01, height_mean = None,
-                 height_sd = None, test = False, res = 512, n_sides = 4):
-        
-        """
-        Arguments:
-            csv_file (string): Path to the csv file with annotations with the collumns
-                0: filenme, 1: label_id, 2: tree height.
-            root_dir (string): Directory with all the las files.
-            img_trans (callable, optional): Optional transform to be applied
-                on a sample.
-        """
-        
-        # set attributes
-        self.trees_frame  = pd.read_csv(csv_file)
-        self.root_dir     = root_dir
-        self.img_trans    = img_trans
-        self.pc_rotate    = pc_rotate
+
+    def __init__(self, csv_or_las, root_dir=None, img_trans=None, pc_rotate=True,
+                 height_noise=0.01, height_mean=None, height_sd=None, test=False,
+                 res=512, n_sides=4, tree_id_col="TreeID"):
+
+        self.img_trans = img_trans
+        self.pc_rotate = pc_rotate
         self.height_noise = height_noise
-        self.height_mean  = height_mean
-        self.height_sd    = height_sd
-        self.test         = test
-        self.res          = res
-        self.n_sides      = n_sides
-    
-    # length
+        self.height_mean = height_mean
+        self.height_sd = height_sd
+        self.test = test
+        self.res = res
+        self.n_sides = n_sides
+        self.tree_id_col = tree_id_col
+
+        if isinstance(csv_or_las, str):
+            # CSV path
+            self.trees_frame = pd.read_csv(csv_or_las)
+            self.root_dir = root_dir
+        elif isinstance(csv_or_las, laspy.LasData):
+            # laspy object
+            las_data = csv_or_las
+            ids = np.unique(las_data[tree_id_col])
+            ids = ids[ids != 0]  # skip 0 if needed
+            data = []
+            for tree_id in ids:
+                mask = las_data[tree_id_col] == tree_id
+                if np.any(mask):
+                    tree_height = np.max(las_data.z[mask]) - np.min(las_data.z[mask])
+                    data.append([f"in_memory_{int(tree_id)}", -999, tree_height, int(tree_id)])
+            self.trees_frame = pd.DataFrame(data, columns=["filename", "species_id", "tree_H", self.tree_id_col])
+            self.las_data = las_data
+            self.root_dir = None
+        else:
+            raise TypeError("csv_or_las must be a CSV file path or laspy.LasData object.")
+
     def __len__(self):
         return len(self.trees_frame)
-    
-    # indexing
+
     def __getitem__(self, idx):
-        
-        # convert indices to list
+
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        
-        # get full las path
-        las_name = os.path.join(
-            self.root_dir,
-            *self.trees_frame.iloc[idx, 0].split('/'))
-        
-        # get side views
-        if self.pc_rotate:
-            image = sv.points_to_images(au.augment(las_name), res_im = self.res, num_side = self.n_sides)
+
+        if hasattr(self, "las_data"):
+            # In-memory laspy object
+            tree_id = int(self.trees_frame.iloc[idx][self.tree_id_col])
+            mask = self.las_data[self.tree_id_col] == tree_id
+            tree = self.las_data[mask] # np.vstack((self.las_data.x[mask], self.las_data.y[mask], self.las_data.z[mask])).T
+            if self.pc_rotate:
+                image = sv.points_to_images(au.augment(tree, tree_id = tree_id), res_im=self.res, num_side=self.n_sides)
+            else:
+                points = np.vstack((tree.x, tree.y, tree.z)).T
+                image = sv.points_to_images(points, res_im=self.res, num_side=self.n_sides)
+            image = torch.from_numpy(image)
+            if self.img_trans:
+                image = self.img_trans(image)
+            image = image.unsqueeze(1)
+            height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype=torch.float32)
+            if self.height_noise > 0:
+                height += np.random.normal(0, self.height_noise)
+            height = (height - self.height_mean) / self.height_sd
+            if self.test:
+                return image, height, f"in_memory_{tree_id}"
+            label = torch.tensor(self.trees_frame.iloc[idx, 1], dtype=torch.int64)
+            return image, height, label
         else:
-            image = sv.points_to_images(rl.read_las(las_name), res_im = self.res, num_side = self.n_sides)
-        image = torch.from_numpy(image)
-        
-        # augment images (all channels at once)
-        if self.img_trans:
-            image = self.img_trans(image)
-        
-        # add dimension
-        image = image.unsqueeze(1)
-        
-        # get height
-        height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype = torch.float32)
-        
-        # augment height
-        if self.height_noise > 0:
-            height += np.random.normal(0, self.height_noise)
-        
-        # scale height using training mean & sd
-        height = (height - self.height_mean) / self.height_sd
-        
-        # return images with filenames
-        if self.test:
-            las_path = self.trees_frame.iloc[idx, 0]
-            return image, height, las_path
-        
-        # return images with labels
-        label = torch.tensor(self.trees_frame.iloc[idx, 1], dtype = torch.int64)
-        return image, height, label
-    
-    # training weights
+            # CSV mode (original)
+            las_name = os.path.join(
+                self.root_dir,
+                *self.trees_frame.iloc[idx, 0].split('/'))
+            if self.pc_rotate:
+                image = sv.points_to_images(au.augment(las_name), res_im=self.res, num_side=self.n_sides)
+            else:
+                image = sv.points_to_images(rl.read_las(las_name), res_im=self.res, num_side=self.n_sides)
+            image = torch.from_numpy(image)
+            if self.img_trans:
+                image = self.img_trans(image)
+            image = image.unsqueeze(1)
+            height = torch.tensor(self.trees_frame.iloc[idx, 2], dtype=torch.float32)
+            if self.height_noise > 0:
+                height += np.random.normal(0, self.height_noise)
+            height = (height - self.height_mean) / self.height_sd
+            if self.test:
+                las_path = self.trees_frame.iloc[idx, 0]
+                return image, height, las_path
+            label = torch.tensor(self.trees_frame.iloc[idx, 1], dtype=torch.int64)
+            return image, height, label
+
     def weights(self):
         return torch.tensor(self.trees_frame["weight"].values)
-
-

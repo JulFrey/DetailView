@@ -11,13 +11,26 @@ import torch
 import numpy as np
 import pandas as pd
 from torchvision import transforms
+import laspy
 
 # import own scripts
 import parallel_densenet as net
 
 #%% set parameters
 
-# set parameters
+# set variables
+path_csv_train  = 'default_vals' # r".\train_labels.csv"
+prediction_data = laspy.read(r"T:\Ecosense\2024-10-15 ecosense.RiSCAN\EXPORTS\Export Point Clouds\segmented_circles\circle_1_segmented.las") # r".\test_labels_es.csv"
+path_las        = r"" # only needed if prediction_data is a csv file, otherwise set to empty string
+model_path      = r".\model_ft_202412171652_3" # path to the model weights if file does not exist it will be downloaded from https://freidata.uni-freiburg.de/records/xw42t-6mt03/files/model_202305171452_60?download=1
+outfile         = r".\predictions.csv" # path to the output file
+outfile_probs   = r".\predictions_probs.csv" # path to the output file with probabilities.
+tree_id_col     = 'TreeID' # column name for the tree id in the las file (only used if prediction_data is a las file).
+
+# lookup file for species names (do not change)
+path_csv_lookup = r".\lookup.csv"
+
+# set parameters (adapt if you run into memory issuses)
 n_class = 33    # number of classes
 n_view  = 7     # number of views
 n_batch = 2**1  # batch size
@@ -25,16 +38,6 @@ n_train = 2**13 # training dataset size
 res = 256       # image ressolution
 n_sides = n_view - 3      # number of sideviews
 n_aug = 10 # number of augmentations per tree
-
-# set paths
-path_csv_lookup = r".\lookup.csv"
-path_csv_train  = r".\train_labels.csv"
-# path_csv_vali   = r".\vali_labels.csv"
-path_csv_test   = r".\test_labels_es.csv"
-path_las        = r""
-model_path           = r".\model_ft_202412171652_3" # path to the model weights
-outfile         = r".\predictions.csv" # path to the output file
-outfile_probs   = r".\predictions_probs.csv" # path to the output file
 
 # check if model exists otherwise load the best model from https://freidata.uni-freiburg.de/records/xw42t-6mt03/files/model_202305171452_60?download=1
 if not os.path.exists(model_path):
@@ -91,7 +94,7 @@ img_trans = transforms.Compose([
     transforms.RandomVerticalFlip(0.5)])
 
 # prepare data for testing
-test_dataset = net.TrainDataset_AllChannels(path_csv_test, path_las,  img_trans = img_trans, pc_rotate = True, height_noise = 0.01, test = True, res = res, n_sides = n_sides, height_mean = train_height_mean, height_sd = train_height_sd)
+test_dataset = net.TrainDataset_AllChannels(prediction_data, path_las,  img_trans = img_trans, pc_rotate = True, height_noise = 0.01, test = True, res = res, n_sides = n_sides, height_mean = train_height_mean, height_sd = train_height_sd, tree_id_col = tree_id_col)
 test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size = int(n_batch/2), shuffle = False, pin_memory = True)
 
 # create dictionary for the accumulated probabilities for each data point
