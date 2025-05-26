@@ -14,7 +14,7 @@ import laspy as las
 import numpy as np
 
 
-def prepare_las_file(input_las, output_csv, output_dir):
+def prepare_las_file(input_las, output_csv, output_dir, skip_0=True, instance_column = 'TreeID'):
     """
     Prepare a single las file for further processing.
 
@@ -22,6 +22,8 @@ def prepare_las_file(input_las, output_csv, output_dir):
     input_las (str): Path to the input las file.
     output_csv (str): Path to the output CSV file.
     output_dir (str): Directory where the processed las files will be saved.
+    skip_0 (bool): If True, skip trees with TreeID 0.
+    instance_column (str): The column name in the las file that contains the tree IDs (default is 'TreeID').
 
     Returns:
     None
@@ -37,7 +39,11 @@ def prepare_las_file(input_las, output_csv, output_dir):
     las_data = las.read(input_las)
 
     # grep the TreeIDs from the las file
-    ids = np.unique(las_data['TreeID'])
+    ids = np.unique(las_data[instance_column])
+
+    # if skip_0 is True, remove TreeID 0 from the list of ids
+    if skip_0 is True:
+        ids = ids[ids != 0]
 
     # create a DataFrame with the required columns filename,species_id,tree_H
     df = pd.DataFrame({
@@ -48,7 +54,7 @@ def prepare_las_file(input_las, output_csv, output_dir):
 
     # save each tree as a separate las file based on TreeID
     for tree_id in ids:
-        tree_points = las_data[las_data['TreeID'] == tree_id]
+        tree_points = las_data[las_data[instance_column] == tree_id]
         if len(tree_points) > 0:
             # calculate tree height as the range of Z values
             tree_height = np.max(tree_points.z) - np.min(tree_points.z)
@@ -64,7 +70,7 @@ def prepare_las_file(input_las, output_csv, output_dir):
     # save the DataFrame to a CSV file
     df = df[df['filename'].notna()]
     df.to_csv(output_csv, index=False)
-    return tree_id
+    return df
 
 
 # #%% test the function
