@@ -31,18 +31,18 @@ path_csv_lookup = r".\lookup.csv"
 path_csv_train  = r".\train_labels.csv"
 # path_csv_vali   = r".\vali_labels.csv"
 path_csv_test   = r".\test_labels_es.csv"
-path_las        = r".\test_las"
-model           = r".\model_ft_202412171652_3" # path to the model weights
+path_las        = r""
+model_path           = r".\model_ft_202412171652_3" # path to the model weights
 outfile         = r".\predictions.csv" # path to the output file
 outfile_probs   = r".\predictions_probs.csv" # path to the output file
 
 # check if model exists otherwise load the best model from https://freidata.uni-freiburg.de/records/xw42t-6mt03/files/model_202305171452_60?download=1
-if not os.path.exists(model):
+if not os.path.exists(model_path):
     # download the file
     import requests
     response = requests.get("https://freidata.uni-freiburg.de/records/xw42t-6mt03/files/model_202305171452_60?download=1")
-    model = "model_ft_202412171652_3"
-    with open(model, 'wb') as f:
+    model_path = r".\model_202305171452_60"
+    with open(model_path, 'wb') as f:
         f.write(response.content)
 
 
@@ -70,7 +70,7 @@ os.environ["NUMEXPR_NUM_THREADS"] = "10" # export NUMEXPR_NUM_THREADS=6
 # load best model
 # model = net.ParallelDenseNet(n_classes = n_class, n_views = n_view)
 model = net.SimpleView(n_classes = n_class, n_views = n_view)
-model.load_state_dict(torch.load(model))
+model.load_state_dict(torch.load(model_path))
 
 # get the device
 device = (
