@@ -20,4 +20,4 @@ COPY . .
 ENTRYPOINT ["python", "predict.py"]
 
 # docker build -t detailview .
-# docker run --rm --gpus all -v C:/TLS/docker/input:/input -v C:/TLS/docker/output:/output detailview /input/circle_3_segmented.las
+# docker run --rm --gpus all -v "C:/TLS/docker/input:/input" -v "C:/TLS/docker//output:/output" a0d4411d3a8d --prediction_data input/circle_3_segmented.las
