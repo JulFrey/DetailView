@@ -13,6 +13,7 @@ import pandas as pd
 from torchvision import transforms
 import laspy
 import argparse
+from datetime import datetime
 
 # import own scripts
 import parallel_densenet as net
@@ -47,8 +48,8 @@ if os.path.splitext(prediction_data)[1].lower() in ['.las', '.laz']:
 # prediction_data = laspy.read(r"T:\Ecosense\2024-10-15 ecosense.RiSCAN\EXPORTS\Export Point Clouds\segmented_circles\circle_1_segmented.las") # r".\test_labels_es.csv"
 # path_las        = r"" # only needed if prediction_data is a csv file, otherwise set to empty string
 # model_path      = r".\model_ft_202412171652_3" # path to the model weights if file does not exist it will be downloaded from https://freidata.uni-freiburg.de/records/xw42t-6mt03/files/model_202305171452_60?download=1
-outfile         = "/output/predictions.csv" # path to the output file
-outfile_probs   = "/output/predictions_probs.csv" # path to the output file with probabilities.
+outfile         = "/output/predictions_" + datetime.today().strftime('%Y-%m-%d_%H-%M-%S') + "_.csv" # path to the output file
+outfile_probs   = "/output/predictions_probs" + datetime.today().strftime('%Y-%m-%d_%H-%M-%S') + "_.csv" # path to the output file with probabilities.
 # tree_id_col     = 'TreeID' # column name for the tree id in the las file (only used if prediction_data is a las file).
 path_csv_train  = 'default_vals' # r".\train_labels.csv"
 
