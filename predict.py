@@ -21,14 +21,16 @@ import parallel_densenet as net
 
 # parse command line arguments
 parser = argparse.ArgumentParser(description="Tree species prediction")
-parser.add_argument('--prediction_data', type=str, default=r"T:\Ecosense\2024-10-15 ecosense.RiSCAN\EXPORTS\Export Point Clouds\segmented_circles\circle_1_segmented.las",
+parser.add_argument('--prediction_data', type=str, default=r"/input/circle_3_segmented.las",
                     help='Path to LAS file or CSV for prediction')
-parser.add_argument('--path_las', type=str, default=r"",
+parser.add_argument('--path_las', type=str, default="",
                     help='Path to LAS files (used if prediction_data is a CSV)')
-parser.add_argument('--model_path', type=str, default=r".\model_ft_202412171652_3",
+parser.add_argument('--model_path', type=str, default="./model_ft_202412171652_3",
                     help='Path to model weights')
 parser.add_argument('--tree_id_col', type=str, default='TreeID',
                     help='Column name for tree IDs in LAS/CSV')
+parser.add_argument('--n_aug', type=str, default=10,
+                    help='Number of augmentations per tree (default: 10)')
 
 args = parser.parse_args()
 
@@ -36,6 +38,7 @@ prediction_data = args.prediction_data
 path_las = args.path_las
 model_path = args.model_path
 tree_id_col = args.tree_id_col
+n_aug = args.n_aug # number of augmentations per tree
 
 if os.path.splitext(prediction_data)[1].lower() in ['.las', '.laz']:
     prediction_data = laspy.read(prediction_data)
@@ -44,8 +47,8 @@ if os.path.splitext(prediction_data)[1].lower() in ['.las', '.laz']:
 # prediction_data = laspy.read(r"T:\Ecosense\2024-10-15 ecosense.RiSCAN\EXPORTS\Export Point Clouds\segmented_circles\circle_1_segmented.las") # r".\test_labels_es.csv"
 # path_las        = r"" # only needed if prediction_data is a csv file, otherwise set to empty string
 # model_path      = r".\model_ft_202412171652_3" # path to the model weights if file does not exist it will be downloaded from https://freidata.uni-freiburg.de/records/xw42t-6mt03/files/model_202305171452_60?download=1
-outfile         = "./output/predictions.csv" # path to the output file
-outfile_probs   = "./output/predictions_probs.csv" # path to the output file with probabilities.
+outfile         = "/output/predictions.csv" # path to the output file
+outfile_probs   = "/output/predictions_probs.csv" # path to the output file with probabilities.
 # tree_id_col     = 'TreeID' # column name for the tree id in the las file (only used if prediction_data is a las file).
 path_csv_train  = 'default_vals' # r".\train_labels.csv"
 
@@ -59,14 +62,15 @@ n_batch = 2**1  # batch size
 n_train = 2**13 # training dataset size
 res = 256       # image ressolution
 n_sides = n_view - 3      # number of sideviews
-n_aug = 10 # number of augmentations per tree
+
 
 # check if model exists otherwise load the best model from https://freidata.uni-freiburg.de/records/xw42t-6mt03/files/model_202305171452_60?download=1
 if not os.path.exists(model_path):
+    print("Model" + model_path + " not found, downloading basemodel from freidata.uni-freiburg.de...")
     # download the file
     import requests
     response = requests.get("https://freidata.uni-freiburg.de/records/xw42t-6mt03/files/model_202305171452_60?download=1")
-    model_path = "./model_202305171452_60"
+    model_path = "/model_202305171452_60"
     with open(model_path, 'wb') as f:
         f.write(response.content)
 

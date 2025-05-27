@@ -129,7 +129,7 @@ class TrainDataset_AllChannels():
                 mask = las_data[tree_id_col] == tree_id
                 if np.any(mask):
                     tree_height = np.max(las_data.z[mask]) - np.min(las_data.z[mask])
-                    data.append([f"in_memory_{int(tree_id)}", -999, tree_height, int(tree_id)])
+                    data.append([f"tree_{int(tree_id)}", -999, tree_height, int(tree_id)])
             self.trees_frame = pd.DataFrame(data, columns=["filename", "species_id", "tree_H", self.tree_id_col])
             self.las_data = las_data
             self.root_dir = None
@@ -163,7 +163,7 @@ class TrainDataset_AllChannels():
                 height += np.random.normal(0, self.height_noise)
             height = (height - self.height_mean) / self.height_sd
             if self.test:
-                return image, height, f"in_memory_{tree_id}"
+                return image, height, f"tree_{int(tree_id)}"
             label = torch.tensor(self.trees_frame.iloc[idx, 1], dtype=torch.int64)
             return image, height, label
         else:
