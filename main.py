@@ -1,7 +1,13 @@
-from fastapi.responses import JSONResponse
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, ValidationError
-import predict
+from pydantic import BaseModel
+from typing import Dict
+import threading
+import uuid
+import time
+import predict  # your predict.py
+
+app = FastAPI()
+task_store: Dict[str, Dict] = {}
 
 class PredictRequest(BaseModel):
     prediction_data: str = r"/input/mini.las"
@@ -10,33 +16,48 @@ class PredictRequest(BaseModel):
     tree_id_col: str = "TreeID"
     n_aug: int = 10
 
-app = FastAPI()
+@app.post("/predict/start")
+def start_prediction(req: PredictRequest):
+    task_id = str(uuid.uuid4())
+    task_store[task_id] = {"status": "running", "result": None}
 
-@app.post("/predict")
-def predict_endpoint(req: PredictRequest):
-    try:
-        outfile, outfile_probs, joined, data_probs_df = predict.run_predict(
-            prediction_data=req.prediction_data,
-            path_las=req.path_las,
-            model_path=req.model_path,
-            tree_id_col=req.tree_id_col,
-            n_aug=req.n_aug
-        )
+    def run_task():
+        try:
+            outfile, outfile_probs, joined, data_probs_df = predict.run_predict(
+                prediction_data=req.prediction_data,
+                path_las=req.path_las,
+                model_path=req.model_path,
+                tree_id_col=req.tree_id_col,
+                n_aug=req.n_aug
+            )
+            task_store[task_id] = {
+                "status": "completed",
+                "result": {
+                    "outfile": outfile,
+                    "outfile_probs": outfile_probs,
+                    "joined": joined.to_dict(orient="records"),
+                    "data_probs": data_probs_df.to_dict(orient="records")
+                }
+            }
+        except Exception as e:
+            task_store[task_id] = {"status": "failed", "error": str(e)}
 
-        # Convert pandas DataFrames to JSON-serializable structures
-        joined_json = joined.to_dict(orient="records")
-        probs_json = data_probs_df.to_dict(orient="records")
+    threading.Thread(target=run_task).start()
 
-        return JSONResponse(content={
-            "outfile": outfile,
-            "outfile_probs": outfile_probs,
-            "joined": joined_json,
-            "data_probs": probs_json
-        })
+    return {"task_id": task_id}
 
-    except ValidationError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")
+@app.get("/predict/status/{task_id}")
+def get_status(task_id: str):
+    task = task_store.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task ID not found")
+    return {"status": task["status"]}
+
+@app.get("/predict/result/{task_id}")
+def get_result(task_id: str):
+    task = task_store.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task ID not found")
+    if task["status"] != "completed":
+        raise HTTPException(status_code=202, detail="Task not yet completed")
+    return task["result"]
