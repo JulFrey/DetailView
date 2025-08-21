@@ -150,7 +150,7 @@ class TrainDataset_AllChannels():
             mask = self.las_data[self.tree_id_col] == tree_id
             tree = self.las_data[mask] # np.vstack((self.las_data.x[mask], self.las_data.y[mask], self.las_data.z[mask])).T
             if self.pc_rotate:
-                image = sv.points_to_images(au.augment(tree, tree_id = tree_id), res_im=self.res, num_side=self.n_sides)
+                image = sv.points_to_images(au.augment(tree, tree_id_col = self.tree_id_col, tree_id = tree_id), res_im=self.res, num_side=self.n_sides)
             else:
                 points = np.vstack((tree.x, tree.y, tree.z)).T
                 image = sv.points_to_images(points, res_im=self.res, num_side=self.n_sides)
