@@ -122,14 +122,24 @@ class TrainDataset_AllChannels():
         elif isinstance(csv_or_las, laspy.LasData):
             # laspy object
             las_data = csv_or_las
+            dims = list(las_data.point_format.dimension_names)
+            if tree_id_col not in dims:
+                raise ValueError(
+                    f"LAS dimension '{tree_id_col}' not found. Available dimensions: {dims}"
+                )
+
             ids = np.unique(las_data[tree_id_col])
             ids = ids[ids != 0]  # skip 0 if needed
-            data = []
-            for tree_id in ids:
-                mask = las_data[tree_id_col] == tree_id
-                if np.any(mask):
-                    tree_height = np.max(las_data.z[mask]) - np.min(las_data.z[mask])
-                    data.append([f"tree_{int(tree_id)}", -999, tree_height, int(tree_id)])
+            # Vectorized computation of per-tree heights
+            tree_ids_arr = np.asarray(las_data[tree_id_col])
+            z_arr = np.asarray(las_data.z)
+            valid_mask = tree_ids_arr != 0
+            df_tmp = pd.DataFrame({
+                tree_id_col: tree_ids_arr[valid_mask].astype(np.int64, copy=False),
+                "z": z_arr[valid_mask]
+            })
+            heights = df_tmp.groupby(tree_id_col)["z"].agg(lambda s: s.max() - s.min())
+            data = [[f"tree_{int(tid)}", -999, float(h), int(tid)] for tid, h in heights.items()]
             self.trees_frame = pd.DataFrame(data, columns=["filename", "species_id", "tree_H", self.tree_id_col])
             self.las_data = las_data
             self.root_dir = None

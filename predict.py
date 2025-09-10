@@ -19,15 +19,21 @@ def run_predict(
 
     if os.path.splitext(prediction_data)[1].lower() in ['.las', '.laz']:
         prediction_data = laspy.read(prediction_data)
+        # exclude prediction_data were TreeID == 0
+        # ids = np.unique(prediction_data[tree_id_col])
+        # ids = ids[ids != 0]  # skip 0 if needed
+        # mask = np.isin(prediction_data[tree_id_col], ids)
+        # prediction_data = prediction_data[mask]
 
     outfile = f"{output_dir}/predictions_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}_.csv"
     outfile_probs = f"{output_dir}/predictions_probs{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}_.csv"
 
     n_class = 33
     n_view = 7
-    n_batch = 2**1
+    n_batch = 2**8
     res = 256
     n_sides = n_view - 3
+    n_workers = 0
 
     if not os.path.exists(model_path):
         import requests
@@ -44,11 +50,11 @@ def run_predict(
         train_height_mean = 15.2046
         train_height_sd = 9.5494
 
-    os.environ["OMP_NUM_THREADS"] = "10"
-    os.environ["OPENBLAS_NUM_THREADS"] = "10"
-    os.environ["MKL_NUM_THREADS"] = "10"
-    os.environ["VECLIB_MAXIMUM_THREADS"] = "10"
-    os.environ["NUMEXPR_NUM_THREADS"] = "10"
+    os.environ["OMP_NUM_THREADS"] = "12"
+    os.environ["OPENBLAS_NUM_THREADS"] = "12"
+    os.environ["MKL_NUM_THREADS"] = "12"
+    os.environ["VECLIB_MAXIMUM_THREADS"] = "12"
+    os.environ["NUMEXPR_NUM_THREADS"] = "12"
 
     model = net.SimpleView(n_classes=n_class, n_views=n_view)
     model.load_state_dict(torch.load(model_path))
@@ -70,7 +76,7 @@ def run_predict(
         height_mean=train_height_mean, height_sd=train_height_sd,
         tree_id_col=tree_id_col)
     test_dataloader = torch.utils.data.DataLoader(
-        test_dataset, batch_size=int(n_batch/2), shuffle=False, pin_memory=True)
+        test_dataset, batch_size=int(n_batch), shuffle=False, pin_memory=True, num_workers=n_workers)
 
     all_paths = test_dataset.trees_frame.iloc[:, 0]
     data_probs = {path: [] for path in all_paths}
