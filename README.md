@@ -55,7 +55,7 @@ Docker is used to run the model in a container.
 You can use the provided Dockerfile to build a Docker image that contains all necessary dependencies to run the model.
 ```bash
 docker build -t detailview .
-docker run --gpus all -it --rm -v /path/to/your/data:/data -v /path/to/output/folder:/output detailview --path_las /data/your_las_file.las --tree_id_col TreeID
+docker run --gpus all -it --rm -v /path/to/your/data:/data -v /path/to/output/folder:/output detailview --prediction_data /data/your_las_file.las --tree_id_col TreeID --model_path /data/weights
 ```
 
 If you dont want to use docker, you can use the model in a lokal environment to perform predictions on your own data.
@@ -63,13 +63,13 @@ Setup the python environment with the required packages.
 ```bash 
 conda create -n detailview python=3.12
 conda activate detailview
-pip3 install numpy pandas scikit-learn laspy matplotlib requests
+pip3 install numpy pandas scikit-learn laspy matplotlib requests lazrs[all]
 pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 ```
 You will need a single las/laz file with a coloumn with single tree labels (e.g. TreeID, can be specified with the argument tree_id_col) or one file for every tree and a csv file with the columns filename, species_id, tree_H. filename gives the ralative path to the path_las argument, species_id can be blank or -999, tree_H is the height of the tree in meters.
 You can then use the predict.py script to perform predictions on your data.
 ```bash
-python3 predict.py --path_las /path/to/your/las/file --tree_id_col TreeID --output_path /path/to/output/folder
+python3 predict.py --prediction_data /path/to/your/las/file --tree_id_col TreeID --output_path /path/to/output/folder --model_path /path/to/your/model/weights
 ```
 
 

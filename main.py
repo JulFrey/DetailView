@@ -1,3 +1,10 @@
+# This is an example FastAPI application that provides endpoints to start a prediction task,
+# the current implementations of the dockerfile makes no use of it, but it can be useful for future extensions.
+# To use this uncomment the following llines in your Dockerfile:
+# #RUN pip3 install fastapi uvicorn
+# #ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# and comment the ENTRYPOINT line that runs predict.py directly.
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Dict
