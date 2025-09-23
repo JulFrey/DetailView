@@ -1,3 +1,5 @@
+from datetime import datetime
+
 def run_predict(
     prediction_data,
     path_las="",
@@ -6,7 +8,8 @@ def run_predict(
     n_aug=10,
     output_dir="/output",
     path_csv_train="default_vals",
-    path_csv_lookup="./lookup.csv"
+    path_csv_lookup="./lookup.csv",
+    projection_backend="numpy"
 ):
     import os
     import torch
@@ -16,9 +19,22 @@ def run_predict(
     import laspy
     from datetime import datetime
     import parallel_densenet as net
+    #import datetime
 
     if os.path.splitext(prediction_data)[1].lower() in ['.las', '.laz']:
         prediction_data = laspy.read(prediction_data)
+        # check if coordinates exceed float32 mm precision; shift by updating header offsets (avoids OverflowError)
+        if projection_backend == "torch":
+            min_vals = [prediction_data.x.min(), prediction_data.y.min(), prediction_data.z.min()]
+            if any(abs(val) > 1e5 for val in min_vals):
+                hdr = prediction_data.header
+                hdr.offsets = (
+                    hdr.offsets[0] - min_vals[0],
+                    hdr.offsets[1] - min_vals[1],
+                    hdr.offsets[2] - min_vals[2],
+                )
+
+
         # exclude prediction_data were TreeID == 0
         # ids = np.unique(prediction_data[tree_id_col])
         # ids = ids[ids != 0]  # skip 0 if needed
@@ -30,7 +46,7 @@ def run_predict(
 
     n_class = 33
     n_view = 7
-    n_batch = 2**8
+    n_batch = 2**2
     res = 256
     n_sides = n_view - 3
     n_workers = 0
@@ -74,7 +90,7 @@ def run_predict(
         prediction_data, path_las, img_trans=img_trans, pc_rotate=True,
         height_noise=0.01, test=True, res=res, n_sides=n_sides,
         height_mean=train_height_mean, height_sd=train_height_sd,
-        tree_id_col=tree_id_col)
+        tree_id_col=tree_id_col, projection_backend=projection_backend)
     test_dataloader = torch.utils.data.DataLoader(
         test_dataset, batch_size=int(n_batch), shuffle=False, pin_memory=True, num_workers=n_workers)
 
@@ -82,23 +98,36 @@ def run_predict(
     data_probs = {path: [] for path in all_paths}
 
     for epoch in range(int(n_aug)):
-        print("epoch: %d" % (epoch + 1))
-        for i, t_data in enumerate(test_dataloader, 0):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] epoch: {epoch + 1}")
+        if epoch == 0:
+            prev_argmax = {path: None for path in all_paths}
+
+        for b, t_data in enumerate(test_dataloader, 0):
             t_inputs, t_heights, t_paths = t_data
             t_inputs, t_heights = t_inputs.to(device), t_heights.to(device)
             t_preds = model(t_inputs, t_heights)
-            t_probs = torch.nn.functional.softmax(t_preds, dim=1)
-            t_probs = t_probs.cpu().detach().numpy()
-            for i, path in enumerate(t_paths):
+            t_probs = torch.nn.functional.softmax(t_preds, dim=1).cpu().detach().numpy()
+            for j, path in enumerate(t_paths):
                 if not any(data_probs[path]):
-                    data_probs[path] = t_probs[i, :]
+                    data_probs[path] = t_probs[j, :]
                 else:
-                    data_probs[path] += t_probs[i, :]
+                    data_probs[path] += t_probs[j, :]
+
+        changes = 0
+        curr_argmax = {}
+        for path, probs in data_probs.items():
+            cls = None if not any(probs) else int(np.argmax(probs))
+            curr_argmax[path] = cls
+            if prev_argmax.get(path) is not None and cls is not None and cls != prev_argmax[path]:
+                changes += 1
+        print(f"aggregation changes vs. previous epoch: {changes}")
+        prev_argmax = curr_argmax
 
     max_prob_class = {key: np.argmax(array) for key, array in data_probs.items()}
     df = pd.DataFrame({
-        "filename": max_prob_class.keys(),
-        "species_id": max_prob_class.values()})
+        "filename": list(max_prob_class.keys()),
+        "species_id": list(max_prob_class.values())
+    })
 
     lookup = pd.read_csv(path_csv_lookup)
     joined = pd.merge(df, lookup, on='species_id')
@@ -113,6 +142,9 @@ def run_predict(
 
 # For CLI usage
 if __name__ == "__main__":
+    # record starting time
+    t0 = datetime.now()
+    print(f"Start time: {t0.strftime('%Y-%m-%d %H:%M:%S')}")
     import argparse
     parser = argparse.ArgumentParser(description="Tree species prediction")
     parser.add_argument('--prediction_data', type=str, default=r"/input/circle_3_segmented.las")
@@ -121,6 +153,7 @@ if __name__ == "__main__":
     parser.add_argument('--tree_id_col', type=str, default='TreeID')
     parser.add_argument('--n_aug', type=int, default=10)
     parser.add_argument('--output_dir', type=str, default="/output")
+    parser.add_argument('--projection_backend', type=str, default="numpy", choices=["torch", "numpy"])
     args = parser.parse_args()
     run_predict(
         args.prediction_data,
@@ -130,3 +163,7 @@ if __name__ == "__main__":
         n_aug=args.n_aug,
         output_dir=args.output_dir
     )
+    t1 = datetime.now()
+    print(f"End time: {t1.strftime('%Y-%m-%d %H:%M:%S')}")
+    # print elapsed time
+    print(f"Elapsed time: {t1 - t0}")

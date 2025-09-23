@@ -17,6 +17,7 @@ import laspy
 # import own scripts
 import augmentation as au
 import sideview as sv
+import sideview_torch as svt
 import read_las as rl
 
 # https://github.com/isaaccorley/simpleview-pytorch/blob/main/simpleview_pytorch/simpleview.py
@@ -103,7 +104,7 @@ class TrainDataset_AllChannels():
 
     def __init__(self, csv_or_las, root_dir=None, img_trans=None, pc_rotate=True,
                  height_noise=0.01, height_mean=None, height_sd=None, test=False,
-                 res=512, n_sides=4, tree_id_col="TreeID"):
+                 res=512, n_sides=4, tree_id_col="TreeID", projection_backend="numpy"):
 
         self.img_trans = img_trans
         self.pc_rotate = pc_rotate
@@ -114,6 +115,7 @@ class TrainDataset_AllChannels():
         self.res = res
         self.n_sides = n_sides
         self.tree_id_col = tree_id_col
+        self.projection_backend = projection_backend
 
         if isinstance(csv_or_las, str):
             # CSV path
@@ -128,9 +130,9 @@ class TrainDataset_AllChannels():
                     f"LAS dimension '{tree_id_col}' not found. Available dimensions: {dims}"
                 )
 
-            ids = np.unique(las_data[tree_id_col])
-            ids = ids[ids != 0]  # skip 0 if needed
-            # Vectorized computation of per-tree heights
+            # ids = np.unique(las_data[tree_id_col])
+            # Filter to valid points and compute per-tree stats, requiring >= 50 points
+            min_points = 50
             tree_ids_arr = np.asarray(las_data[tree_id_col])
             z_arr = np.asarray(las_data.z)
             valid_mask = tree_ids_arr != 0
@@ -138,9 +140,20 @@ class TrainDataset_AllChannels():
                 tree_id_col: tree_ids_arr[valid_mask].astype(np.int64, copy=False),
                 "z": z_arr[valid_mask]
             })
-            heights = df_tmp.groupby(tree_id_col)["z"].agg(lambda s: s.max() - s.min())
-            data = [[f"tree_{int(tid)}", -999, float(h), int(tid)] for tid, h in heights.items()]
-            self.trees_frame = pd.DataFrame(data, columns=["filename", "species_id", "tree_H", self.tree_id_col])
+            stats = df_tmp.groupby(tree_id_col).agg(
+                z_min=("z", "min"),
+                z_max=("z", "max"),
+                count=("z", "size"),
+            )
+            stats = stats[stats["count"] >= min_points]
+            if stats.empty:
+                raise ValueError(f"No trees with >= {min_points} points were found in LAS.")
+            heights = (stats["z_max"] - stats["z_min"]).astype(float)
+            data = [[f"tree_{int(tid)}", -999, float(h), int(tid)]
+                    for tid, h in zip(stats.index.values, heights.values)]
+            self.trees_frame = pd.DataFrame(
+                data, columns=["filename", "species_id", "tree_H", self.tree_id_col]
+            )
             self.las_data = las_data
             self.root_dir = None
         else:
@@ -160,10 +173,23 @@ class TrainDataset_AllChannels():
             mask = self.las_data[self.tree_id_col] == tree_id
             tree = self.las_data[mask] # np.vstack((self.las_data.x[mask], self.las_data.y[mask], self.las_data.z[mask])).T
             if self.pc_rotate:
-                image = sv.points_to_images(au.augment(tree, tree_id_col = self.tree_id_col, tree_id = tree_id), res_im=self.res, num_side=self.n_sides)
+                if self.projection_backend == "numpy":
+                    image = sv.points_to_images(au.augment(tree, tree_id_col = self.tree_id_col, tree_id = tree_id), res_im=self.res, num_side=self.n_sides)
+                elif self.projection_backend == "torch": # torch
+                    points = au.augment(tree, tree_id_col = self.tree_id_col, tree_id = tree_id)
+                    points = torch.from_numpy(points).float()
+                    image = svt.points_to_images(points, res_im=self.res, num_side=self.n_sides)
+                    #image = image.numpy()
+                else : raise ValueError(f"Unknown projection_backend: {self.projection_backend}")
             else:
                 points = np.vstack((tree.x, tree.y, tree.z)).T
-                image = sv.points_to_images(points, res_im=self.res, num_side=self.n_sides)
+                if self.projection_backend == "numpy":
+                    image = sv.points_to_images(points, res_im=self.res, num_side=self.n_sides)
+                elif self.projection_backend == "torch": # torch
+                    points = torch.from_numpy(points).float()
+                    image = svt.points_to_images(points, res_im=self.res, num_side=self.n_sides)
+                    #image = image.numpy()
+                else : raise ValueError(f"Unknown projection_backend: {self.projection_backend}")
             image = torch.from_numpy(image)
             if self.img_trans:
                 image = self.img_trans(image)
@@ -182,10 +208,25 @@ class TrainDataset_AllChannels():
                 self.root_dir,
                 *self.trees_frame.iloc[idx, 0].split('/'))
             if self.pc_rotate:
-                image = sv.points_to_images(au.augment(las_name), res_im=self.res, num_side=self.n_sides)
+                if self.projection_backend == "numpy":
+                    image = sv.points_to_images(au.augment(las_name), res_im=self.res, num_side=self.n_sides)
+                elif self.projection_backend == "torch": # torch
+                    points = au.augment(las_name)
+                    points = torch.from_numpy(points).float()
+                    image = svt.points_to_images(points, res_im=self.res, num_side=self.n_sides)
+                    #image = image.numpy()
+                else : raise ValueError(f"Unknown projection_backend: {self.projection_backend}")
             else:
-                image = sv.points_to_images(rl.read_las(las_name), res_im=self.res, num_side=self.n_sides)
-            image = torch.from_numpy(image)
+                if self.projection_backend == "numpy":
+                    image = sv.points_to_images(rl.read_las(las_name), res_im=self.res, num_side=self.n_sides)
+                elif self.projection_backend == "torch": # torch
+                    points = rl.read_las(las_name)
+                    points = torch.from_numpy(points).float()
+                    image = svt.points_to_images(points, res_im=self.res, num_side=self.n_sides)
+                    #image = image.numpy()
+                else : raise ValueError(f"Unknown projection_backend: {self.projection_backend}")
+            if self.projection_backend == "numpy":
+                image = torch.from_numpy(image)
             if self.img_trans:
                 image = self.img_trans(image)
             image = image.unsqueeze(1)
