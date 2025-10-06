@@ -9,7 +9,8 @@ def run_predict(
     output_dir="/output",
     path_csv_train="default_vals",
     path_csv_lookup="./lookup.csv",
-    projection_backend="numpy"
+    projection_backend="numpy",
+    output_type="csv"
 ):
     import os
     import torch
@@ -33,7 +34,7 @@ def run_predict(
                     hdr.offsets[1] - min_vals[1],
                     hdr.offsets[2] - min_vals[2],
                 )
-
+                prediction_data = laspy.LasData(hdr, prediction_data.points)
 
         # exclude prediction_data were TreeID == 0
         # ids = np.unique(prediction_data[tree_id_col])
@@ -124,9 +125,11 @@ def run_predict(
         prev_argmax = curr_argmax
 
     max_prob_class = {key: np.argmax(array) for key, array in data_probs.items()}
+    max_prob = {key: (array.max() / array.sum()) if np.any(array) else 0.0 for key, array in data_probs.items()}
     df = pd.DataFrame({
         "filename": list(max_prob_class.keys()),
-        "species_id": list(max_prob_class.values())
+        "species_id": list(max_prob_class.values()),
+        "species_prob": list(max_prob.values())
     })
 
     lookup = pd.read_csv(path_csv_lookup)
@@ -135,9 +138,49 @@ def run_predict(
     data_probs_df = pd.DataFrame.from_dict(data_probs, orient='index').reset_index()
     col_labels = lookup['species']
     data_probs_df.columns = pd.concat([pd.Series(["File"]), col_labels])
+    if output_type in ["csv", "both"]:
+        joined.to_csv(outfile, index=False)
+        data_probs_df.to_csv(outfile_probs, index=False)
+    if output_type in ["las", "both"]:
+        if not isinstance(prediction_data, laspy.LasData):
+            print("Error: prediction_data must be provided as a single LAS/LAZ file to output LAS with predictions.")
+        else:
+            prediction_data.add_extra_dim(
+                laspy.ExtraBytesParams(name="species_id", type=np.uint8))
+            prediction_data.add_extra_dim(
+                laspy.ExtraBytesParams(name="species_prob", type=np.float32))
+            species_ids = np.zeros(prediction_data.X.shape[0], dtype=np.uint8)
+            species_probs = np.zeros(prediction_data.X.shape[0], dtype=np.float32)
+            # Vectorized assignment by mapping point TreeIDs to predictions
+            # parse tree_id from filenames
+            joined["tree_id"] = joined["filename"].str.extract(r"(\d+)$").astype(int)
 
-    joined.to_csv(outfile, index=False)
-    data_probs_df.to_csv(outfile_probs, index=False)
+            # build species map
+            _species_map = joined.set_index("tree_id")["species_id"].astype(np.uint8)
+
+            # build max-prob map
+            _prob_map = joined.set_index("tree_id")["species_prob"].astype(np.float32)
+
+            # map for all points in one shot
+            _point_tids = pd.Series(np.asarray(prediction_data[tree_id_col]), copy=False)
+            species_ids = _point_tids.map(_species_map).fillna(255).astype(np.uint8).to_numpy()
+            species_probs = _point_tids.map(_prob_map).fillna(0.0).astype(np.float32).to_numpy()
+            prediction_data.species_id = species_ids
+            prediction_data.species_prob = species_probs
+
+            # revert offsetting if applied before
+            if projection_backend == "torch" and any(abs(val) > 1e5 for val in min_vals):
+                hdr = prediction_data.header
+                hdr.offsets = (
+                    hdr.offsets[0] + min_vals[0],
+                    hdr.offsets[1] + min_vals[1],
+                    hdr.offsets[2] + min_vals[2],
+                )
+                prediction_data = laspy.LasData(hdr, prediction_data.points)
+
+            outlas_path = f"{output_dir}/predictions_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}_.laz"
+            prediction_data.write(outlas_path)
+            print(f"Wrote: {outlas_path}")
     return outfile, outfile_probs, joined, data_probs_df
 
 # For CLI usage
@@ -154,6 +197,7 @@ if __name__ == "__main__":
     parser.add_argument('--n_aug', type=int, default=10)
     parser.add_argument('--output_dir', type=str, default="/output")
     parser.add_argument('--projection_backend', type=str, default="numpy", choices=["torch", "numpy"])
+    parser.add_argument('--output_type', type=str, default="csv", choices=["csv", "las", "both"])
     args = parser.parse_args()
     run_predict(
         args.prediction_data,
@@ -161,7 +205,9 @@ if __name__ == "__main__":
         model_path=args.model_path,
         tree_id_col=args.tree_id_col,
         n_aug=args.n_aug,
-        output_dir=args.output_dir
+        output_dir=args.output_dir,
+        projection_backend=args.projection_backend,
+        output_type=args.output_type
     )
     t1 = datetime.now()
     print(f"End time: {t1.strftime('%Y-%m-%d %H:%M:%S')}")

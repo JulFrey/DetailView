@@ -154,6 +154,31 @@ class TrainDataset_AllChannels():
             self.trees_frame = pd.DataFrame(
                 data, columns=["filename", "species_id", "tree_H", self.tree_id_col]
             )
+            tree_ids = las_data.points[tree_id_col]  # numpy array
+            x = las_data.X
+            y = las_data.Y
+            z = las_data.Z
+
+            # Sortierung nach tree_id
+            order = np.argsort(tree_ids)
+            tree_ids_sorted = tree_ids[order]
+            x_sorted = x[order]
+            y_sorted = y[order]
+            z_sorted = z[order]
+            las_data = pd.DataFrame({
+                "tree_ids": tree_ids_sorted,
+                "X": x_sorted,
+                "Y": y_sorted,
+                "Z": z_sorted
+            })
+
+            # fast NumPy views for search/slicing during __getitem__
+            self._tree_ids_np = tree_ids_sorted  # int64
+            self._x_np = x_sorted.astype(np.float32, copy=False)
+            self._y_np = y_sorted.astype(np.float32, copy=False)
+            self._z_np = z_sorted.astype(np.float32, copy=False)
+            self.root_dir = None
+
             self.las_data = las_data
             self.root_dir = None
         else:
@@ -170,13 +195,22 @@ class TrainDataset_AllChannels():
         if hasattr(self, "las_data"):
             # In-memory laspy object
             tree_id = int(self.trees_frame.iloc[idx][self.tree_id_col])
-            mask = self.las_data[self.tree_id_col] == tree_id
-            tree = self.las_data[mask] # np.vstack((self.las_data.x[mask], self.las_data.y[mask], self.las_data.z[mask])).T
+            # mask = self.las_data[self.tree_id_col] == tree_id
+            # tree = self.las_data[mask] # np.vstack((self.las_data.x[mask], self.las_data.y[mask], self.las_data.z[mask])).T
+            lo = np.searchsorted(self._tree_ids_np, tree_id, side="left")
+            hi = np.searchsorted(self._tree_ids_np, tree_id, side="right")
+
+            tree = np.column_stack((self._x_np[lo:hi],
+                                    self._y_np[lo:hi],
+                                    self._z_np[lo:hi]))  # float32
+
             if self.pc_rotate:
                 if self.projection_backend == "numpy":
-                    image = sv.points_to_images(au.augment(tree, tree_id_col = self.tree_id_col, tree_id = tree_id), res_im=self.res, num_side=self.n_sides)
+                    image = sv.points_to_images(au.augment(tree),
+                                                res_im=self.res, num_side=self.n_sides)
+                    image = torch.from_numpy(image)
                 elif self.projection_backend == "torch": # torch
-                    points = au.augment(tree, tree_id_col = self.tree_id_col, tree_id = tree_id)
+                    points = au.augment(tree)
                     points = torch.from_numpy(points).float()
                     image = svt.points_to_images(points, res_im=self.res, num_side=self.n_sides)
                     #image = image.numpy()
@@ -185,12 +219,13 @@ class TrainDataset_AllChannels():
                 points = np.vstack((tree.x, tree.y, tree.z)).T
                 if self.projection_backend == "numpy":
                     image = sv.points_to_images(points, res_im=self.res, num_side=self.n_sides)
+                    image = torch.from_numpy(image)
                 elif self.projection_backend == "torch": # torch
                     points = torch.from_numpy(points).float()
                     image = svt.points_to_images(points, res_im=self.res, num_side=self.n_sides)
                     #image = image.numpy()
                 else : raise ValueError(f"Unknown projection_backend: {self.projection_backend}")
-            image = torch.from_numpy(image)
+
             if self.img_trans:
                 image = self.img_trans(image)
             image = image.unsqueeze(1)

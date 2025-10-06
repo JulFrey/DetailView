@@ -120,7 +120,7 @@ def points_to_images(points: np.ndarray,
     Returns CPU numpy float32 array of shape [num_side+3, res, res].
     """
     if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = "cpu" #torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Always produce a NumPy copy for the section (raw, unnormalized)
     if isinstance(points, torch.Tensor):

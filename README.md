@@ -66,10 +66,16 @@ conda activate detailview
 pip3 install numpy pandas scikit-learn laspy matplotlib requests lazrs[all]
 pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 ```
-You will need a single las/laz file with a coloumn with single tree labels (e.g. TreeID, can be specified with the argument tree_id_col) or one file for every tree and a csv file with the columns filename, species_id, tree_H. filename gives the ralative path to the path_las argument, species_id can be blank or -999, tree_H is the height of the tree in meters.
+You will need a single las/laz file with a column with single tree labels (e.g. TreeID, can be specified with the argument tree_id_col) or one file for every tree and a csv file with the columns filename, species_id, tree_H. filename gives the ralative path to the path_las argument, species_id can be blank or -999, tree_H is the height of the tree in meters.
 You can then use the predict.py script to perform predictions on your data.
 ```bash
-python3 predict.py --prediction_data /path/to/your/las/file --tree_id_col TreeID --output_path /path/to/output/folder --model_path /path/to/your/model/weights
+python3 predict.py --prediction_data /path/to/your/las/file \
+  --tree_id_col TreeID --output_dir /path/to/output/folder \
+  --model_path /path/to/your/model/weights \
+  --projection_backend torch --output_type both
 ```
+The argument projection_backend can be set to "torch" or "numpy". The torch backend is faster but the original publication was done with the numpy version. 
+The output_type can be set to "csv", "las" or "both". Depending on the choice the output will be a csv file with the predictions, a las file with the predictions as an additional column or both.
+By default the model performs multiple augmentations (10) and averages the predictions. This can be changed with the argument n_aug.
 
 

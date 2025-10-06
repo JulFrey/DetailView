@@ -9,8 +9,9 @@ Created on Tue Apr 18 08:55:35 2023
 import read_las as rl
 import numpy as np
 import laspy
+from typing import Dict, Optional
 
-def augment(las_input, rotate_h_max=22.5, rotate_v_max=180, sampling_max=0.1, tree_id_col='TreeID', tree_id=None):
+def augment(las_input, rotate_h_max=22.5, rotate_v_max=180, sampling_max=0.1):
     
     """
     Parameters
@@ -39,19 +40,22 @@ def augment(las_input, rotate_h_max=22.5, rotate_v_max=180, sampling_max=0.1, tr
     # Read points
     if isinstance(las_input, str):
         points = rl.read_las(las_input)
-    elif isinstance(las_input, laspy.LasData):
-        if tree_id is None:
-            raise ValueError("TreeID must be provided when using a laspy object.")
-        mask = las_input[tree_id_col] == tree_id
-        points = np.vstack((las_input.x[mask], las_input.y[mask], las_input.z[mask])).T
     else:
-        raise TypeError("las_input must be a file path or laspy.LasData object.")
+        points = las_input
+    # elif isinstance(las_input, laspy.LasData):
+    #     if tree_id is None:
+    #         raise ValueError("TreeID must be provided when using a laspy object.")
+    #     mask = las_input[tree_id_col] == tree_id
+    #     points = np.vstack((las_input.x[mask], las_input.y[mask], las_input.z[mask])).T
+    # else:
+    #     raise TypeError("las_input must be a file path or laspy.LasData object.")
 
 
     # sub-sampling
-    s_num = int((1 - sampling_max) * points.shape[0])
-    s_idx = np.random.choice(np.arange(points.shape[0]), s_num, replace = False)
-    points = points[s_idx,:]
+    s_num = int(points.shape[0] * (1 - sampling_max))
+    if 0 < s_num < points.shape[0]:
+        idx = np.random.permutation(points.shape[0])[:s_num]
+        points = points[idx]
     
     # prepare transformation matrix
     transform = np.identity(3, float)
@@ -82,10 +86,11 @@ def augment(las_input, rotate_h_max=22.5, rotate_v_max=180, sampling_max=0.1, tr
     transform[:3,:3] = r_xyz
     
     # apply transformation
-    points = np.matmul(points, transform.T)
-    
-    # recenter bottom to 0m height
-    points[:,2] = points[:,2] - np.min(points[:,2])
+    # in-place rotation (avoids temp array) and in-place recentring
+    np.matmul(points, transform.T, out=points)
+    z = points[:, 2]
+    z -= z.min()
     
     # return path
     return points
+
