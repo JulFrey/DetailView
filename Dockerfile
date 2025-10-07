@@ -17,7 +17,7 @@ RUN apt-get update && \
 WORKDIR /app
 
 # Copy install packages
-RUN pip3 install numpy pandas scikit-learn laspy matplotlib requests
+RUN pip3 install numpy pandas scikit-learn laspy matplotlib requests tqdm
 RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 #RUN pip3 install fastapi uvicorn
 RUN pip3 install lazrs[all]

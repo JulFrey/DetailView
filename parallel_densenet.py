@@ -104,7 +104,7 @@ class TrainDataset_AllChannels():
 
     def __init__(self, csv_or_las, root_dir=None, img_trans=None, pc_rotate=True,
                  height_noise=0.01, height_mean=None, height_sd=None, test=False,
-                 res=512, n_sides=4, tree_id_col="TreeID", projection_backend="numpy"):
+                 res=512, n_sides=4, tree_id_col="TreeID", projection_backend="numpy", max_points_per_tree=1000000):
 
         self.img_trans = img_trans
         self.pc_rotate = pc_rotate
@@ -116,6 +116,7 @@ class TrainDataset_AllChannels():
         self.n_sides = n_sides
         self.tree_id_col = tree_id_col
         self.projection_backend = projection_backend
+        self.max_points_per_tree = max_points_per_tree  # None or int, to limit memory use in laspy mode
 
         if isinstance(csv_or_las, str):
             # CSV path
@@ -154,35 +155,81 @@ class TrainDataset_AllChannels():
             self.trees_frame = pd.DataFrame(
                 data, columns=["filename", "species_id", "tree_H", self.tree_id_col]
             )
-            tree_ids = las_data.points[tree_id_col]  # numpy array
-            x = las_data.X
-            y = las_data.Y
-            z = las_data.Z
+            tree_ids = np.asarray(las_data[tree_id_col], dtype=np.int64)
+            x = np.asarray(las_data.x, dtype=np.float32)
+            y = np.asarray(las_data.y, dtype=np.float32)
+            z = np.asarray(las_data.z, dtype=np.float32)
 
-            # Sortierung nach tree_id
-            order = np.argsort(tree_ids)
-            tree_ids_sorted = tree_ids[order]
-            x_sorted = x[order]
-            y_sorted = y[order]
-            z_sorted = z[order]
-            las_data = pd.DataFrame({
-                "tree_ids": tree_ids_sorted,
-                "X": x_sorted,
-                "Y": y_sorted,
-                "Z": z_sorted
-            })
+            # Sorted by tree_id
+            order = np.argsort(tree_ids, kind="stable")
+            self._tree_ids_np = tree_ids[order]
+            self._x_np = x[order]
+            self._y_np = y[order]
+            self._z_np = z[order]
 
-            # fast NumPy views for search/slicing during __getitem__
-            self._tree_ids_np = tree_ids_sorted  # int64
-            self._x_np = x_sorted.astype(np.float32, copy=False)
-            self._y_np = y_sorted.astype(np.float32, copy=False)
-            self._z_np = z_sorted.astype(np.float32, copy=False)
-            self.root_dir = None
+            # Precompute spans per tree_id for O(1) lookup (avoid searchsorted in __getitem__)
+            uniq, starts, counts = np.unique(self._tree_ids_np, return_index=True, return_counts=True)
+            self._tid2span = {int(u): (int(s), int(s + c)) for u, s, c in zip(uniq.tolist(), starts.tolist(), counts.tolist())}
 
-            self.las_data = las_data
+            self.las_data = True
             self.root_dir = None
         else:
             raise TypeError("csv_or_las must be a CSV file path or laspy.LasData object.")
+
+    @staticmethod
+    def _random_thin(points: np.ndarray, max_points: int) -> np.ndarray:
+        n = points.shape[0]
+        if max_points is None or n <= max_points:
+            return points
+        idx = np.random.choice(n, size=max_points, replace=False)
+        return points[idx]
+
+    def _augment_torch(self, pts: torch.Tensor,
+                       rotate_h_max: float = 22.5,
+                       rotate_v_max: float = 180.0,
+                       sampling_max: float = 0.1) -> torch.Tensor:
+        # Optional random point drop (up to sampling_max fraction)
+        if sampling_max > 0.0 and pts.shape[0] > 1:
+            keep = max(1, int(pts.shape[0] * (1.0 - sampling_max)))
+            idx = torch.randperm(pts.shape[0], device=pts.device)[:keep]
+            pts = pts.index_select(0, idx)
+
+        # Random Euler rotations (degrees -> radians)
+        deg2rad = torch.pi / 180.0
+        rx = (torch.rand((), device=pts.device) * 2 * rotate_h_max - rotate_h_max) * deg2rad
+        ry = (torch.rand((), device=pts.device) * 2 * rotate_h_max - rotate_h_max) * deg2rad
+        rz = (torch.rand((), device=pts.device) * 2 * rotate_v_max - rotate_v_max) * deg2rad
+
+        cx, sx = torch.cos(rx), torch.sin(rx)
+        cy, sy = torch.cos(ry), torch.sin(ry)
+        cz, sz = torch.cos(rz), torch.sin(rz)
+
+        # Build proper 3x3 rotation matrices on the same device/dtype
+        Rx = torch.eye(3, dtype=pts.dtype, device=pts.device)
+        Rx[1, 1] = cx;
+        Rx[1, 2] = -sx
+        Rx[2, 1] = sx;
+        Rx[2, 2] = cx
+
+        Ry = torch.eye(3, dtype=pts.dtype, device=pts.device)
+        Ry[0, 0] = cy;
+        Ry[0, 2] = sy
+        Ry[2, 0] = -sy;
+        Ry[2, 2] = cy
+
+        Rz = torch.eye(3, dtype=pts.dtype, device=pts.device)
+        Rz[0, 0] = cz;
+        Rz[0, 1] = -sz
+        Rz[1, 0] = sz;
+        Rz[1, 1] = cz
+
+        R = Rz @ Ry @ Rx
+        pts = pts @ R.T
+
+        # Shift z so min z == 0 (match NumPy augmentation)
+        zmin = pts[:, 2].amin()
+        pts[:, 2] -= zmin
+        return pts
 
     def __len__(self):
         return len(self.trees_frame)
@@ -195,14 +242,20 @@ class TrainDataset_AllChannels():
         if hasattr(self, "las_data"):
             # In-memory laspy object
             tree_id = int(self.trees_frame.iloc[idx][self.tree_id_col])
-            # mask = self.las_data[self.tree_id_col] == tree_id
-            # tree = self.las_data[mask] # np.vstack((self.las_data.x[mask], self.las_data.y[mask], self.las_data.z[mask])).T
-            lo = np.searchsorted(self._tree_ids_np, tree_id, side="left")
-            hi = np.searchsorted(self._tree_ids_np, tree_id, side="right")
+            span = self._tid2span.get(tree_id)
+            if span is None:
+                raise ValueError(f"No points found for tree_id={tree_id}")
+            lo, hi = span
 
-            tree = np.column_stack((self._x_np[lo:hi],
-                                    self._y_np[lo:hi],
-                                    self._z_np[lo:hi]))  # float32
+            # Slice once, thin if requested
+            tree = np.column_stack((
+                self._x_np[lo:hi],
+                self._y_np[lo:hi],
+                self._z_np[lo:hi]
+            ))  # float32, shape [K,3]
+
+            if self.max_points_per_tree:
+                tree = self._random_thin(tree, self.max_points_per_tree)
 
             if self.pc_rotate:
                 if self.projection_backend == "numpy":
@@ -210,18 +263,17 @@ class TrainDataset_AllChannels():
                                                 res_im=self.res, num_side=self.n_sides)
                     image = torch.from_numpy(image)
                 elif self.projection_backend == "torch": # torch
-                    points = au.augment(tree)
-                    points = torch.from_numpy(points).float()
+                    points = torch.from_numpy(tree).float()
+                    points = self._augment_torch(points)
                     image = svt.points_to_images(points, res_im=self.res, num_side=self.n_sides)
                     #image = image.numpy()
                 else : raise ValueError(f"Unknown projection_backend: {self.projection_backend}")
             else:
-                points = np.vstack((tree.x, tree.y, tree.z)).T
                 if self.projection_backend == "numpy":
-                    image = sv.points_to_images(points, res_im=self.res, num_side=self.n_sides)
+                    image = sv.points_to_images(tree, res_im=self.res, num_side=self.n_sides)
                     image = torch.from_numpy(image)
                 elif self.projection_backend == "torch": # torch
-                    points = torch.from_numpy(points).float()
+                    points = torch.from_numpy(tree).float()
                     image = svt.points_to_images(points, res_im=self.res, num_side=self.n_sides)
                     #image = image.numpy()
                 else : raise ValueError(f"Unknown projection_backend: {self.projection_backend}")

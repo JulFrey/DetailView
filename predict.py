@@ -25,16 +25,17 @@ def run_predict(
     if os.path.splitext(prediction_data)[1].lower() in ['.las', '.laz']:
         prediction_data = laspy.read(prediction_data)
         # check if coordinates exceed float32 mm precision; shift by updating header offsets (avoids OverflowError)
-        if projection_backend == "torch":
-            min_vals = [prediction_data.x.min(), prediction_data.y.min(), prediction_data.z.min()]
-            if any(abs(val) > 1e5 for val in min_vals):
-                hdr = prediction_data.header
-                hdr.offsets = (
-                    hdr.offsets[0] - min_vals[0],
-                    hdr.offsets[1] - min_vals[1],
-                    hdr.offsets[2] - min_vals[2],
-                )
-                prediction_data = laspy.LasData(hdr, prediction_data.points)
+
+        min_vals = [prediction_data.x.min(), prediction_data.y.min(), prediction_data.z.min()]
+        if any(abs(val) > 1e5 for val in min_vals):
+            data_offset_applied = True
+            hdr = prediction_data.header
+            hdr.offsets = (
+                hdr.offsets[0] - min_vals[0],
+                hdr.offsets[1] - min_vals[1],
+                hdr.offsets[2] - min_vals[2],
+            )
+            prediction_data = laspy.LasData(hdr, prediction_data.points)
 
         # exclude prediction_data were TreeID == 0
         # ids = np.unique(prediction_data[tree_id_col])
@@ -53,6 +54,7 @@ def run_predict(
     n_workers = 0
 
     if not os.path.exists(model_path):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Model path {model_path} does not exist or was not supplied. Downloading example model...")
         import requests
         response = requests.get("https://freidata.uni-freiburg.de/records/xw42t-6mt03/files/model_202305171452_60?download=1")
         model_path = "/model_202305171452_60"
@@ -66,6 +68,7 @@ def run_predict(
     else:
         train_height_mean = 15.2046
         train_height_sd = 9.5494
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] No training data: using default tree height scaling values for inference.")
 
     os.environ["OMP_NUM_THREADS"] = "12"
     os.environ["OPENBLAS_NUM_THREADS"] = "12"
@@ -87,6 +90,8 @@ def run_predict(
     img_trans = transforms.Compose([
         transforms.RandomVerticalFlip(0.5)])
 
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Model initialized. Prepare dataset...")
+
     test_dataset = net.TrainDataset_AllChannels(
         prediction_data, path_las, img_trans=img_trans, pc_rotate=True,
         height_noise=0.01, test=True, res=res, n_sides=n_sides,
@@ -95,15 +100,28 @@ def run_predict(
     test_dataloader = torch.utils.data.DataLoader(
         test_dataset, batch_size=int(n_batch), shuffle=False, pin_memory=True, num_workers=n_workers)
 
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Dataset with {len(test_dataset)} trees prepared. Start predictions...")
+
     all_paths = test_dataset.trees_frame.iloc[:, 0]
     data_probs = {path: [] for path in all_paths}
 
     for epoch in range(int(n_aug)):
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] epoch: {epoch + 1}")
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] epoch: {epoch + 1} / {int(n_aug)}")
         if epoch == 0:
             prev_argmax = {path: None for path in all_paths}
 
-        for b, t_data in enumerate(test_dataloader, 0):
+        try:
+            from tqdm.auto import tqdm
+            _iterable = tqdm(
+                test_dataloader,
+                total=len(test_dataloader),
+                desc=f"Aug {epoch + 1}/{int(n_aug)}",
+                leave=False
+            )
+        except Exception:
+            _iterable = test_dataloader
+
+        for b, t_data in enumerate(_iterable, 0):
             t_inputs, t_heights, t_paths = t_data
             t_inputs, t_heights = t_inputs.to(device), t_heights.to(device)
             t_preds = model(t_inputs, t_heights)
@@ -121,8 +139,10 @@ def run_predict(
             curr_argmax[path] = cls
             if prev_argmax.get(path) is not None and cls is not None and cls != prev_argmax[path]:
                 changes += 1
-        print(f"aggregation changes vs. previous epoch: {changes}")
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] aggregation changes vs. previous epoch: {changes}")
         prev_argmax = curr_argmax
+
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Predictions done. Preparing and writing outputs...")
 
     max_prob_class = {key: np.argmax(array) for key, array in data_probs.items()}
     max_prob = {key: (array.max() / array.sum()) if np.any(array) else 0.0 for key, array in data_probs.items()}
@@ -141,9 +161,11 @@ def run_predict(
     if output_type in ["csv", "both"]:
         joined.to_csv(outfile, index=False)
         data_probs_df.to_csv(outfile_probs, index=False)
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Wrote: {outfile}")
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Wrote: {outfile_probs}")
     if output_type in ["las", "both"]:
         if not isinstance(prediction_data, laspy.LasData):
-            print("Error: prediction_data must be provided as a single LAS/LAZ file to output LAS with predictions.")
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Error: prediction_data must be provided as a single LAS/LAZ file to output LAS with predictions.")
         else:
             prediction_data.add_extra_dim(
                 laspy.ExtraBytesParams(name="species_id", type=np.uint8))
@@ -169,7 +191,7 @@ def run_predict(
             prediction_data.species_prob = species_probs
 
             # revert offsetting if applied before
-            if projection_backend == "torch" and any(abs(val) > 1e5 for val in min_vals):
+            if data_offset_applied:
                 hdr = prediction_data.header
                 hdr.offsets = (
                     hdr.offsets[0] + min_vals[0],
@@ -180,7 +202,7 @@ def run_predict(
 
             outlas_path = f"{output_dir}/predictions_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}_.laz"
             prediction_data.write(outlas_path)
-            print(f"Wrote: {outlas_path}")
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Wrote: {outlas_path}")
     return outfile, outfile_probs, joined, data_probs_df
 
 # For CLI usage
