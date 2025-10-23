@@ -7,7 +7,7 @@ Created on Tue Apr 18 08:55:35 2023
 
 # import packages
 import numpy as np
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
 import pandas as pd
 
@@ -161,10 +161,10 @@ def topview(points, res_im = 256, inverse = False, plot = False):
     # replace dummy values with value
     top_image[top_image == -999] = 0
     
-    # show image
-    if plot:
-        plt.imshow(top_image, interpolation = 'nearest')
-        plt.show()
+    # # show image
+    # if plot:
+    #     plt.imshow(top_image, interpolation = 'nearest')
+    #     plt.show()
     
     # return array
     return top_image
@@ -226,10 +226,10 @@ def sideview(points, res_im = 256, plot = False):
     # replace dummy values with value
     side_image[side_image == -999] = 0
     
-    # show image
-    if plot:
-        plt.imshow(side_image, interpolation = 'nearest')
-        plt.show()
+    # # show image
+    # if plot:
+    #     plt.imshow(side_image, interpolation = 'nearest')
+    #     plt.show()
     
     # return array
     return side_image

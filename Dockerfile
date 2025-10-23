@@ -1,48 +1,55 @@
-FROM nvidia/cuda:12.9.0-cudnn-devel-ubuntu22.04
+# Build stage (optional, if you need to compile wheels)
+FROM nvidia/cuda:12.8.0-cudnn-runtime-ubuntu22.04 AS builder
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libgl1 \
-    libglx-mesa0 \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Python 3.12 and pip
-RUN apt-get update && \
-    apt-get install -y python3-pip python3-dev && \
-    rm -rf /var/lib/apt/lists/*
-
-# Set work directory
 WORKDIR /app
 
-# Copy install packages
-RUN pip3 install numpy pandas scikit-learn laspy matplotlib requests tqdm
-RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-#RUN pip3 install fastapi uvicorn
-RUN pip3 install lazrs[all]
+# Install python and pip
+RUN apt-get update && \
+    apt-get install -y python3-pip python3-dev wget && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copy your code
+# Install dependencies
+RUN pip3 install --no-cache-dir numpy pandas scikit-learn laspy requests tqdm lazrs[all]
+
+RUN pip3 install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu128
+
+# Copy app code and required assets only
 COPY *.py /app/
-COPY model_ft_202412171652_3 /app/
 COPY lookup.csv /app/
 
-
-# Set environment variable for torch cache
-ENV TORCH_HOME=/app/torch_cache
-
-# Create cache directory
+# Create directories for model weights
 RUN mkdir -p /app/torch_cache/hub/checkpoints
 
-# Download densenet201 weights
+# Download model weights
 RUN wget -O /app/torch_cache/hub/checkpoints/densenet201-c1103571.pth \
     https://download.pytorch.org/models/densenet201-c1103571.pth
 
-RUN python3 -c "import torch; print(torch.cuda.is_available()); import time; time.sleep(2.5)"
+# ---
 
-# Set entrypoint
-ENTRYPOINT ["python", "predict.py"]
-#ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Final stage: minimal runtime
+FROM nvidia/cuda:12.8.0-cudnn-runtime-ubuntu22.04
 
-# docker build -t detailview .
-# docker run --rm --gpus all -v "C:/TLS/docker/input:/input" -v "C:/TLS/docker//output:/output" detailview --prediction_data /input/circle_3_segmented.las --model_path /app/model_ft_202412171652_3
+WORKDIR /app
+
+# Install minimal runtime dependencies only
+RUN apt-get update && \
+    apt-get install -y libexpat1 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy complete Python installation from builder
+COPY --from=builder /usr/bin/python3* /usr/bin/
+COPY --from=builder /usr/lib/python3.10 /usr/lib/python3.10
+COPY --from=builder /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+COPY --from=builder /app /app
+
+# ENV and cache setup
+ENV TORCH_HOME=/app/torch_cache
+RUN mkdir -p /app/torch_cache/hub/checkpoints
+
+# Create input/output directories
+RUN mkdir -p /out && chmod -R 777 /out && \
+    mkdir -p /in && chmod -R 777 /in
+
+ENTRYPOINT ["python3", "predict.py"]
