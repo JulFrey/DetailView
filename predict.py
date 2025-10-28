@@ -22,6 +22,8 @@ def run_predict(
     import parallel_densenet as net
     #import datetime
 
+    data_offset_applied = False
+
     if os.path.splitext(prediction_data)[1].lower() in ['.las', '.laz']:
         prediction_data = laspy.read(prediction_data)
         # check if coordinates exceed float32 mm precision; shift by updating header offsets (avoids OverflowError)
